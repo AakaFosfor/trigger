@@ -75,6 +75,8 @@ v/vme/switch/switch.make
 v/vme/ctpt/ctpt.make
 v/vme/lvdst/lvdst.make
 v/vme/ttcit/ttcit.make
+v/vme/honzas/honzas.make
+v/vme/honzar/honzar.make
 v/vme/CFG/ctp/DB/*
 v/vme/CFG/ctp/pardefs/*
 v/vme/CFG/ctp/monscal/inputs.mcfg
