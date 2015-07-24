@@ -10,6 +10,7 @@ class BUSYBOARD: public BOARD
 	void setCluster(w32 iclu,w32 detmask){vmew(SET_CLUSTER+4*iclu,detmask);};
 	w32 GetDAQBUSY(){return vmer(DAQ_BUSY);};
 	void measurephase();
+	void analSSMTestDDR();
 
  private:
          // vme addresses

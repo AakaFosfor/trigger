@@ -24,3 +24,19 @@ void BUSYBOARD::measurephase()
    usleep(500);
  }
 }
+
+/*
+ * analyze SSM - test for DDR link
+ * Pospisil, July 2015
+ *
+ * Listen for input signals from LM0 board (cluster signals) and check
+ * for pseudo-random pattern. It uses custom generator design in LM0 FPGA.
+ * It test LM0-BUSY DDR link on cluster.
+ */
+
+void BUSYBOARD::analSSMTestDDR()
+{
+	cout << "Analysing..." << endl;
+	w32 *sm = GetSSM();
+	// find 
+}
