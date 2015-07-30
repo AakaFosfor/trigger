@@ -2060,6 +2060,7 @@ class VmeCrate:
     self._instance= self
   def addBoard(self, board):
     self.boards.append(board)
+    self.master.title(self.master.title()+" "+board.boardName)
   def findBoard(self, boardname):
     for b in self.boards:
       if b.boardName==boardname:return(b)
