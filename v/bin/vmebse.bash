@@ -144,7 +144,7 @@ alias vmecrate=$VMEBDIR/crate.py
 alias vmedirs='echo   VMEDRIVER:$VMEDRIVER   VMESITE:$VMESITE   VMEGCC:$VMEGCC   SMAQ_C:$SMAQ_C; echo   VMEBDIR:$VMEBDIR;echo   VMECFDIR:$VMECFDIR; echo VMEWORKDIR:$VMEWORKDIR; echo DATE_INFOLOGGER_DIR:$DATE_INFOLOGGER_DIR   DATE_DAQLOGBOOK_DIR:$DATE_DAQLOGBOOK_DIR; echo ACT_DB:$ACT_DB; echo DIM_DNS_NODE:$DIM_DNS_NODE'
 if [ "$hname" = 'alidcscom835' -o "$hname" = 'avmes' ] ;then
   echoint "Server cpu: $hname, alias defs in bin/setenv"
-elif [ "$hname" = 'altri1' -o "$hname" = 'alidcsvme001' ] ;then
+elif [ "$hname" = 'altri1' -o "$hname" = 'alidcsvme001' -o "$hname" = 'altrip2' ] ;then
   #ctp vme cpu:
   alias "ctp=vmecrate nbi ctp"
   alias ctpdims=$vdir/bin/ctpdims.sh
