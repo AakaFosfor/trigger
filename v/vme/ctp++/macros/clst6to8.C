@@ -51,8 +51,8 @@ w32 pattern[PATTERN_LENGTH] = {
                                 __LINE__, __func__); } while (0)
 
 typedef struct {
-	int bitErrors;
-	int wordErrors;
+	unsigned long long bitErrors;
+	unsigned long long wordErrors;
 } t_errors;
 
 void fillPattern() {
@@ -156,15 +156,16 @@ int main() {
 	t_errors errors = {0, 0};
 	t_errors totalErrors = {0, 0};
 	BUSYBOARD *bb = new BUSYBOARD(vmesp);
-	float errorRate;
+	double errorRate;
 	char oper;
+	unsigned long long snapshot;
 
 	debug_print("vsp = %i\n", bb->getvsp());
 	w32 ver = bb->getFPGAversion();
 	debug_print("Version: 0x%X (%i)\n", ver, ver);
 	bb->StopSSM();
 	fillPattern();
-	for(int snapshot = 0; true; snapshot++) {
+	for(snapshot = 0; true; snapshot++) {
 		bb->SetMode("outmon", 'a');
 		bb->StartSSM();
 		usleep(50000);
@@ -180,14 +181,14 @@ int main() {
 		totalErrors.bitErrors += errors.bitErrors;
 		totalErrors.wordErrors += errors.wordErrors;
 		if (totalErrors.bitErrors == 0) {
-			errorRate = 1.0 / (float) ((snapshot+1) * SSM_LENGTH * CLUSTERS);
+			errorRate = 1.0 / (((double) snapshot+1) * SSM_LENGTH * CLUSTERS);
 			oper = '<';
 		} else {
-			errorRate = (float) totalErrors.bitErrors / (float) ((snapshot+1) * SSM_LENGTH * CLUSTERS);
+			errorRate = (double) totalErrors.bitErrors / (((double) snapshot+1) * SSM_LENGTH * CLUSTERS);
 			oper = '=';
 		}
 		printf(
-			"Snapshot %d checked, found %d/%d errors (%d/%d total), BER %c %.2e so far.\n",
+			"Snapshot %llu checked, found %llu/%llu errors (%llu/%llu total), BER %c %.2e so far.\n",
 			snapshot,
 			errors.bitErrors, errors.wordErrors, totalErrors.bitErrors, totalErrors.wordErrors,
 			oper, errorRate
