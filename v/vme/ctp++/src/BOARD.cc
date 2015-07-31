@@ -442,7 +442,7 @@ int BOARD::SetMode(w32 const modecode) const
    }
    rc= setomvspSSM(modecode&3);
  }else
-   printf("setomSSM: 0x%x \n",modecode);
+   //printf("setomSSM: 0x%x \n",modecode);
    rc= setomvspSSM(modecode);   //CTP Board
  //ssmmode=modecode;
  return rc;
