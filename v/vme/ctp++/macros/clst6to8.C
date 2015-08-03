@@ -150,22 +150,34 @@ t_errors analSSMTestDDR(w32 *sm, int snapshot) {
 	return errors;
 }
 
-int main() {
+int main(int argc, char *argv[]) {
 	int vmesp = -1;
 	w32 *ssm;
 	t_errors errors = {0, 0};
 	t_errors totalErrors = {0, 0};
-	BUSYBOARD *bb = new BUSYBOARD(vmesp);
+	BUSYBOARD *bb;
 	double errorRate;
 	char oper;
 	unsigned long long snapshot;
-
+	unsigned long long pastSnapshots = 0;
+	
+	if (argc > 2) {
+		cout << "usage : " << argv[0] << " [past_snapshots_checked]" << endl;
+		cout << "  past_snapshots_checked - snapshots checked without error so far" << endl;
+		return EXIT_FAILURE;
+	}
+	
+	if (argc == 2) {
+		pastSnapshots = atol(argv[1]);
+	}
+	
+	bb = new BUSYBOARD(vmesp);
 	debug_print("vsp = %i\n", bb->getvsp());
 	w32 ver = bb->getFPGAversion();
 	debug_print("Version: 0x%X (%i)\n", ver, ver);
 	bb->StopSSM();
 	fillPattern();
-	for(snapshot = 0; true; snapshot++) {
+	for(snapshot = 1; true; snapshot++) {
 		bb->SetMode("outmon", 'a');
 		bb->StartSSM();
 		usleep(50000);
@@ -181,20 +193,20 @@ int main() {
 		totalErrors.bitErrors += errors.bitErrors;
 		totalErrors.wordErrors += errors.wordErrors;
 		if (totalErrors.bitErrors == 0) {
-			errorRate = 1.0 / (((double) snapshot+1) * SSM_LENGTH * CLUSTERS);
+			errorRate = 1.0 / (((double) (snapshot+pastSnapshots)) * SSM_LENGTH * CLUSTERS);
 			oper = '<';
 		} else {
-			errorRate = (double) totalErrors.bitErrors / (((double) snapshot+1) * SSM_LENGTH * CLUSTERS);
+			errorRate = (double) totalErrors.bitErrors / (((double) (snapshot+pastSnapshots)) * SSM_LENGTH * CLUSTERS);
 			oper = '=';
 		}
 		printf(
-			"Snapshot %llu checked, found %llu/%llu errors (%llu/%llu total), BER %c %.2e so far.\n",
-			snapshot,
+			"Snapshots checked: %llu (in this run: %llu), found %llu/%llu errors (%llu/%llu total), BER %c %.2e so far.\n",
+			(pastSnapshots + snapshot), snapshot,
 			errors.bitErrors, errors.wordErrors, totalErrors.bitErrors, totalErrors.wordErrors,
 			oper, errorRate
 		);
 		fflush(stdout);
 		fflush(stderr);
 	}
-	return 0;
+	return EXIT_SUCCESS;
 }
