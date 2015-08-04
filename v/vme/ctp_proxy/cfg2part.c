@@ -422,7 +422,8 @@ if( (line[j] != '\n') && (line[i] != '\n') ) {
  klas->l0inverted=l0inverted;
  klas->l0vetos=l0vetos;
  // Warning if using 'not defined' resources:
-klas->sdg= sdgix; klas->scaler=scaler;
+klas->sdg= sdgix; klas->scaler=0;
+klas->lmscaler=scaler;
  klas->l1definition=l1definition;
  klas->l1inverted=l1inverted;
  klas->l2definition=l2definition;
@@ -1290,6 +1291,8 @@ for(iclu=0;iclu<NCLUST;iclu++){
   //daqi->classmasks33_64[iclu]= classmasks_l[iclu]>>32;
   daqi->classmasks00_063[iclu]=classmasks_l[iclu];
   daqi->classmasks64_100[iclu]=classmasks_u[iclu];
+  // If INRND1 doen send any inputs to daq
+  if(partit->inpsctp)daqi->inpmasks[iclu]=0;
 };
 return(rcdaqlog);
 }
