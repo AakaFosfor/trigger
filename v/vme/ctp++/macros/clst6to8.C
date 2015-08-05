@@ -1,3 +1,5 @@
+#include <cmath>
+
 #include "BUSYBOARD.h"
 
 /*
@@ -9,10 +11,18 @@
  * FPGA. It test LM0-BUSY DDR links for L0 clusters.
  */
 
+// debug stuff:
 //#define DEBUG
-
 //#define POISON_INNER
 //#define POISON_OUTER
+
+// BER confidence level
+#define BER_CL (0.95)
+// specified BER
+#define BER_S (1.0e-13)
+
+#define SSM_OFFSET 5
+#define SSM_LENGTH (1024*1024-SSM_OFFSET)
 
 const w32 patternSingle = 0x135E26BC;
 #define CLUSTERS (8+1)
@@ -24,7 +34,7 @@ w32 pattern[PATTERN_LENGTH] = {
 	0, 0, 0, 0, 0, 0, 0, 0,
 	0, 0, 0, 0, 0, 0, 0
 };
-#define SSM_LENGTH (1024*1024-5)
+
 #define L0CLST1 (1<<21)
 #define L0CLST2 (1<<22)
 #define L0CLST3 (1<<23)
@@ -156,10 +166,12 @@ int main(int argc, char *argv[]) {
 	t_errors errors = {0, 0};
 	t_errors totalErrors = {0, 0};
 	BUSYBOARD *bb;
-	double errorRate;
+	double errorRate, berCL, berS, iFact;
 	char oper;
 	unsigned long long snapshot;
 	unsigned long long pastSnapshots = 0;
+	unsigned long long totalBits;
+	unsigned long long i;
 	
 	if (argc > 2) {
 		cout << "usage : " << argv[0] << " [past_snapshots_checked]" << endl;
@@ -178,33 +190,57 @@ int main(int argc, char *argv[]) {
 	bb->StopSSM();
 	fillPattern();
 	for(snapshot = 1; true; snapshot++) {
+		// get snapshot
 		bb->SetMode("outmon", 'a');
 		bb->StartSSM();
 		usleep(50000);
 		bb->StopSSM();
 		bb->ReadSSM();
-		ssm = bb->GetSSM()+5;
+		ssm = bb->GetSSM()+SSM_OFFSET;
 		#ifdef POISON_OUTER
 		if ((snapshot % 3) == 2) {
 			ssm[1234] ^= L0CLST5;
 		}
 		#endif
+		// calculate errors in snapshot
 		errors = analSSMTestDDR(ssm, snapshot);
 		totalErrors.bitErrors += errors.bitErrors;
 		totalErrors.wordErrors += errors.wordErrors;
+		// calcuate estimated BER
+		totalBits = (snapshot+pastSnapshots) * SSM_LENGTH * CLUSTERS;
 		if (totalErrors.bitErrors == 0) {
-			errorRate = 1.0 / (((double) (snapshot+pastSnapshots)) * SSM_LENGTH * CLUSTERS);
+			errorRate = 1.0 / ((double) totalBits);
 			oper = '<';
 		} else {
-			errorRate = (double) totalErrors.bitErrors / (((double) (snapshot+pastSnapshots)) * SSM_LENGTH * CLUSTERS);
-			oper = '=';
+			errorRate = (double) totalErrors.bitErrors / ((double) totalBits);
+			oper = '~';
 		}
+		// calculate BER confidence level for BER_S
+		// https://www.jitterlabs.com/support/calculators/ber-confidence-level-calculator/
+		berCL = 1;
+		iFact = 1;
+		for (i = 1; i <= totalErrors.bitErrors; i++) {
+			iFact *= i;
+			berCL += pow(totalBits * BER_S, i)/iFact;
+		}
+		berCL *= exp(-(totalBits*BER_S));
+		berCL = 1-berCL;
+		// output results
 		printf(
-			"Snapshots checked: %llu (in this run: %llu), found %llu/%llu errors (%llu/%llu total), BER %c %.2e so far.\n",
+			"Snapshots checked: %llu (in this run: %llu), found %llu/%llu errors (%llu/%llu total), approx. BER %c %.2e (BER=%.2e @ %.2f%%",
 			(pastSnapshots + snapshot), snapshot,
 			errors.bitErrors, errors.wordErrors, totalErrors.bitErrors, totalErrors.wordErrors,
-			oper, errorRate
+			oper, errorRate,
+			BER_S, (100*berCL)
 		);
+		if (totalErrors.bitErrors == 0) {
+			// calculate estimated BER for BER_CL
+			// https://www.jitterlabs.com/support/calculators/ber-confidence-level-calculator/
+			// VALID ONLY IF ERRORS=0 !!!
+			berS = -log(1.0l-BER_CL)/totalBits;
+			printf("; BER=%.2e @ %.2f%%", berS, (100*BER_CL));
+		}
+		printf(").\n");
 		fflush(stdout);
 		fflush(stderr);
 	}
