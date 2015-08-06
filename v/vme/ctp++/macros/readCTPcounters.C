@@ -8,17 +8,40 @@ int main()
   usleep(1000000);
   ctp->readCounters();
   //
-  ctp->l0->printCountersDiff();
-  ctp->l1->printCountersDiff();
-  ctp->l2->printCountersDiff();
+  if (ctp->l0) {
+    ctp->l0->printCountersDiff();
+  }
+  if (ctp->l1) {
+    ctp->l1->printCountersDiff();
+  }
+  if (ctp->l2) {
+    ctp->l2->printCountersDiff();
+  }
   //ctp->busy->printCountersDiff();
-  ctp->fo[0]->printCountersDiff();
+  for (int i = 0; i < NUMOFFO; i++) {
+    if (ctp->fo[i]) {
+      ctp->fo[i]->printCountersDiff();
+	}
+  }
   //ctp->fo[0]->printCounters();
+
   printf(">-----------------------------Checking counters for no configuration \n");
-  ctp->l0->CheckCountersNoTriggers();
-  ctp->l1->CheckCountersNoTriggers();
-  ctp->l2->CheckCountersNoTriggers();
-  ctp->fo[0]->CheckCountersNoTriggers();
-  ctp->inter->CheckCountersNoTriggers();
+  if (ctp->l0) {
+    ctp->l0->CheckCountersNoTriggers();
+  }
+  if (ctp->l1) {
+    ctp->l1->CheckCountersNoTriggers();
+  }
+  if (ctp->l2) {
+    ctp->l2->CheckCountersNoTriggers();
+  }
+  for (int i = 0; i < NUMOFFO; i++) {
+    if (ctp->fo[i]) {
+      ctp->fo[i]->CheckCountersNoTriggers();
+	}
+  }
+  if (ctp->inter) {
+    ctp->inter->CheckCountersNoTriggers();
+  }
   return 0;
 }
