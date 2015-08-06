@@ -39,3 +39,4 @@ obj/%.o: src/%.cc src/%.h
 
 clean:
 	rm obj/*.o
+	rm *.e
