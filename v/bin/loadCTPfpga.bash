@@ -12,7 +12,7 @@ fi
 #RSCMD="ssh altri1 ls -l v/vme/CFG/$1"
 }
 
-cd ~trigger/v/vme
+cd $VMEWORKDIR
 RSCMD=""
 if [ $# -eq 2 ] ;then
   CTPBASE=$2

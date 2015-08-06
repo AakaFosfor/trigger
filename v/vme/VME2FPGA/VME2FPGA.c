@@ -141,9 +141,9 @@ int loadFPGA(){
      gettimeofday(&tval0,&tz);
      MonitorStatus(ConfigStatus,&bit);
      for(j=0; j<6; j++)printf("%5i     ",bit[j]);printf("\n");
-     while(i<1000 && notfinished)
+     while(i<500 && notfinished)
      {
-      usleep(1);
+      usleep(1000);
       MonitorStatus(ConfigStatus,&bit);\
       /* 
         Checking CONF_DONE
@@ -381,10 +381,10 @@ int loadFM()
    if(writeFM(FlashAccessIncr,ConfigFile[i]) !=0) return 8; 
    /* printf("LoadFM: ConfigFile[%i]=%c \n",i,ConfigFile[i]); */
    /* if( (i % 10) == 0){ printf(" %i \r",i);fflush(stdout);} */
-   if( (i % prt100) == 0) printf("lOadFM: %i words written \n",i);
+   if( (i % prt100) == 0) printf("loadFM: %i words written \n",i);
    for(idum=0;idum<10;idum++)
    if(quit !=0) return 9;
-   }; printf("lOadFM: %i words written \n",i);
+   }; printf("loadFM: %i words written \n",i);
  return 0;
  }else return 3;  
 }
