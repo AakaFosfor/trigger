@@ -1350,7 +1350,7 @@ class VMEcnts(CTPcnts):
         else:                   # CTP: accrual valid
           newval= self.allregs[cntnum]
           newbin= eval(self.allregs[cntnum])
-        if prevent != newval:
+        if eval(prevent) != eval(newval):
           self.regs[i].cntentry.setColor(myw.COLOR_VALCHANGED)
           self.regs[i].cntentry.setEntry(newval)
         else:
