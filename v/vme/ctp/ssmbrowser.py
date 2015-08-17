@@ -183,6 +183,9 @@ Signal values (0->green, 1->red).
    the shown signals are shifted by the same number of BCs.
 """, self.canvas)
     self.bsnames= BSnames(self,self.ssmix)
+    self.delbut= myw.MywButton(self.topfr, label='X',
+      cmd=(lambda: self.bsnames.delsig(self.topfr)), side='right', bg="red",
+      helptext="Delete this signal");
     incanvas="""
     bsfr= myw.MywFrame(self.fr,side=TOP,relief=FLAT)  # board/signals frame
     BSnames(bsfr,"A")
