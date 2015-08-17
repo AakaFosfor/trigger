@@ -1,0 +1,1 @@
+nohup ./clst6to8-FO.e $@ &> clst6to8-FO.log &
