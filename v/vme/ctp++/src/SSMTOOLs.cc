@@ -51,7 +51,7 @@ void SSMTOOLs::writeNumber(int i0,int length,w32 mask, w32 Number){
 //Pattern is string of (0-9),(a-f) which is interpreted as hexadecimal number.
 // 0x1234 = ssm:0001001000110100
 */
-int SSMTOOLs::writeSPP(int Start,int Skip,int Channel,char *Pattern){
+int SSMTOOLs::writeSPP(int Start,int Skip,int Channel,const char *Pattern){
  int i,j,i0,length;
  w32 bit,mask0,mask1;
  int pat;
