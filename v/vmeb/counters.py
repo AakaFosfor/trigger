@@ -674,6 +674,7 @@ fol0clstt	-L0 test cluster trigger
 fol1clstt	-L1 test cluster trigger""")
       self.makeit1(fona,fona+"l0clst", CTPcnts.i16, "L0 cluster1-8 trigger")
       self.makeit1(fona,fona+"l1clst", CTPcnts.i16, "L1 cluster1-8 trigger")
+      self.makeit1(fona,"Hamming errors", (fona+"l0hamming_error", fona+"l1hamming_error"), "Hamming errors on input links")
       self.makeit1(fona,fona+"glitch", CTPcnts.iT6, "Glitch for cluster T,1-8")
       self.makeit1(fona,fona+"l1spurious", CTPcnts.iT6, "L1spurious cluster T,1-8")
       self.makeit1(fona,fona+"ppout", CTPcnts.i14, "PP output 1-4")
@@ -707,7 +708,7 @@ The number of 'cluster busy' signals.""")
       "8 Cluster DAQ BUSY timers")
     self.makeit1("busy","bytimers", ("CTPdeadtime","CTPbusy","bytime"),
       "Other BUSY timers")
-    self.makeit1("busy","bycounters", ("byanyclu","byhammingin","byclu1","byclu2",
+    self.makeit1("busy","bycounters", ("byanyclu","byl0hamming_error","byclu1","byclu2",
       "byclu3","byclu4","byclu5","byclu6","byclu7","byclu8","bytestclass",
       "byendCTPbusy", "bylongbusy"),
       """BUSY counters:
@@ -943,7 +944,7 @@ orc_error  -Orbit record with error
       board="busy"; n= 43+ BYSH; CGT='T';   #run1: 39
     elif string.find(cntlabel,"byanyclu")==0:
       board="busy"; n= 44+ BYSH   #run1: 40
-    elif string.find(cntlabel,"byhammingin")==0:
+    elif string.find(cntlabel,"byl0hamming_error")==0:
       board="busy"; n= 45+ BYSH
     elif string.find(cntlabel,"bytestclass")==0:
       board="busy"; n= 53+ BYSH   #run1: 47
@@ -973,6 +974,12 @@ orc_error  -Orbit record with error
       board="fo"; c= cntlabel[13]; 
       if c=='T': c='0'
       n= 28 + int(c) +FOSH+(foix-1)*NCOUNTERS_FO   #run1:22
+    elif self.findFO(cntlabel,"l0hamming_error"):
+      foix= self.findFO(cntlabel,"l0hamming_error")
+      board="fo"; n= 37+FOSH+(foix-1)*NCOUNTERS_FO
+    elif self.findFO(cntlabel,"l1hamming_error"):
+      foix= self.findFO(cntlabel,"l1hamming_error")
+      board="fo"; n= 38+FOSH+(foix-1)*NCOUNTERS_FO
     elif self.findFO(cntlabel,"ppi"):
       foix= self.findFO(cntlabel,"ppi")
       board="fo"; n= 40+FOSH+(foix-1)*NCOUNTERS_FO   #run1:29
@@ -1145,7 +1152,7 @@ orc_error  -Orbit record with error
       butlab=="l1timers" or butlab=="l2timers" or\
       butlab=="bytimers" or butlab=="bycounters" or\
       butlab=="inttimers" or butlab=="intcounters" or\
-      butlab=="Strobes,ESR" or\
+      butlab=="Strobes,ESR" or butlab=="Hamming errors" or\
       butlab=="Strobes" or\
       self.findFO(butlab,"others")!=None:
       return 1
