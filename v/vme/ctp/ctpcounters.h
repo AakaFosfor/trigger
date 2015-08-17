@@ -22,7 +22,7 @@ from 9.4.2015 reserved for lmclst[1..8], lm_out
 #define NCOUNTERS_FOae  52   + L2r counter for each connector -stored in spare871..894
 */
 #define NCOUNTERS_BUSY 160  // run1:105 +49spares + 6runx  run2: 300, but we read only 160
-#define NCOUNTERS_BUSY_SP1 113 //run1:105 run2:113 (187 spares, we read only 47 of them)
+#define NCOUNTERS_BUSY_SP1 122 //run1:105 run2:113 (187 spares, we read only 47 of them)
 //#define NCOUNTERS_BUSY_L2RS 129  // run1 only:129. 6*4 L2r FO counters (FO1, FO2,...)
 #define NCOUNTERS_BUSY_TSGROUP 153  // active Time sharing class group
 #define NCOUNTERS_BUSY_RUNX1 154  // 6 RUNX counters from here (see dimcoff,dims)

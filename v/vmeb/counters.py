@@ -31,7 +31,7 @@ NCOUNTERS_FO_SP1=37   # run2:  3 spares
 NCOUNTERS_FO_SP2=63   # run2: 9 spares
 #
 NCOUNTERS_BUSY=160
-NCOUNTERS_BUSY_SP1=113    # run1: 105   run2: 113/47
+NCOUNTERS_BUSY_SP1=122    # run1: 105   run2: 113/47
 #NCOUNTERS_BUSY_L2RS=129   # from 5.7.2012, not used in run2
 NCOUNTERS_BUSY_TSGROUP=153
 NCOUNTERS_BUSY_RUNX1=154
@@ -707,7 +707,7 @@ The number of 'cluster busy' signals.""")
       "8 Cluster DAQ BUSY timers")
     self.makeit1("busy","bytimers", ("CTPdeadtime","CTPbusy","bytime"),
       "Other BUSY timers")
-    self.makeit1("busy","bycounters", ("byanyclu","byclu1","byclu2",
+    self.makeit1("busy","bycounters", ("byanyclu","byhammingin","byclu1","byclu2",
       "byclu3","byclu4","byclu5","byclu6","byclu7","byclu8","bytestclass",
       "byendCTPbusy", "bylongbusy"),
       """BUSY counters:
@@ -943,14 +943,16 @@ orc_error  -Orbit record with error
       board="busy"; n= 43+ BYSH; CGT='T';   #run1: 39
     elif string.find(cntlabel,"byanyclu")==0:
       board="busy"; n= 44+ BYSH   #run1: 40
-    elif string.find(cntlabel,"byclu")==0:
-      board="busy"; n= 44+ BYSH+ int(cntlabel[5:])   #run1: 40
+    elif string.find(cntlabel,"byhammingin")==0:
+      board="busy"; n= 45+ BYSH
     elif string.find(cntlabel,"bytestclass")==0:
       board="busy"; n= 53+ BYSH   #run1: 47
     elif string.find(cntlabel,"byendCTPbusy")==0:
       board="busy"; n= 111+ BYSH   #run1: 103
     elif string.find(cntlabel,"bylongbusy")==0:
       board="busy"; n= 112+ BYSH   #run1: 104
+    elif string.find(cntlabel,"byclu")==0:
+      board="busy"; n= 112+ BYSH+ int(cntlabel[5:])   #run1: 40
     #------------------------------------------------------ FO
     elif self.findFO(cntlabel,"time"):
       foix= self.findFO(cntlabel,"time")
