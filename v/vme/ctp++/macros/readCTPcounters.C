@@ -8,6 +8,9 @@ int main()
   usleep(1000000);
   ctp->readCounters();
   //
+  if (ctp->busy) {
+    ctp->busy->printCountersDiff();
+  }
   if (ctp->l0) {
     ctp->l0->printCountersDiff();
   }
@@ -17,7 +20,6 @@ int main()
   if (ctp->l2) {
     ctp->l2->printCountersDiff();
   }
-  //ctp->busy->printCountersDiff();
   for (int i = 0; i < NUMOFFO; i++) {
     if (ctp->fo[i]) {
       ctp->fo[i]->printCountersDiff();
@@ -26,6 +28,9 @@ int main()
   //ctp->fo[0]->printCounters();
 
   printf(">-----------------------------Checking counters for no configuration \n");
+  if (ctp->busy) {
+    ctp->busy->CheckCountersNoTriggers();
+  }
   if (ctp->l0) {
     ctp->l0->CheckCountersNoTriggers();
   }
