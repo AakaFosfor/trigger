@@ -1,15 +1,15 @@
 #include <cmath>
 
 #include "BOARD.h"
-#include "BUSYBOARD.h"
+#include "FOBOARD.h"
 
 /*
  * analyze SSM - test for DDR link
- * Pospisil, July 2015
+ * Pospisil, August 2015
  *
  * Listen for input signals from LM0 board (cluster signals) and check for
  * pseudo-random pattern (4bit LFSR). It uses custom generator design in LM0
- * FPGA. It test LM0-BUSY DDR links for L0 clusters.
+ * FPGA. It test LM0-FO DDR links for L0 clusters.
  */
 
 // debug stuff:
@@ -28,7 +28,7 @@
 const w32 patternSingle = 0x135E26BC;
 #define CLUSTERS (8+1)
 const int shifts[CLUSTERS] = {
-	0, 4, 8, 0, 14, 2, 2, 3, 13
+	0, 1, 4, 2, 8, 5, 14, 3, 11
 };
 #define PATTERN_LENGTH 15
 w32 pattern[PATTERN_LENGTH] = {
@@ -36,15 +36,15 @@ w32 pattern[PATTERN_LENGTH] = {
 	0, 0, 0, 0, 0, 0, 0
 };
 
-#define L0CLST1BIT 21
-#define L0CLST2BIT 22
-#define L0CLST3BIT 23
-#define L0CLST4BIT 24
-#define L0CLST5BIT 25
-#define L0CLST6BIT 26
-#define L0CLST7BIT 27
-#define L0CLST8BIT 28
-#define L0CLSTTBIT 29
+#define L0CLST1BIT 2
+#define L0CLST2BIT 3
+#define L0CLST3BIT 4
+#define L0CLST4BIT 5
+#define L0CLST5BIT 6
+#define L0CLST6BIT 7
+#define L0CLST7BIT 10
+#define L0CLST8BIT 11
+#define L0CLSTTBIT 1
 
 const int clusterPosition[CLUSTERS] = {
 	L0CLST1BIT,
@@ -227,7 +227,7 @@ int main(int argc, char *argv[]) {
 		pastSnapshots = atol(argv[1]);
 	}
 	
-	board = new BUSYBOARD(-1);
+	board = new FOBOARD(0x821000, -1);
 	debug_print("vsp = %i\n", board->getvsp());
 	w32 ver = board->getFPGAversion();
 	debug_print("Version: 0x%X (%i)\n", ver, ver);
@@ -235,7 +235,7 @@ int main(int argc, char *argv[]) {
 	fillPattern();
 	for(snapshot = 1; true; snapshot++) {
 		// get snapshot
-		board->SetMode("outmon", 'a');
+		board->SetMode("inmonl0", 'a');
 		board->StartSSM();
 		usleep(50000);
 		board->StopSSM();
