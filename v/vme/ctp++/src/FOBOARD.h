@@ -4,8 +4,7 @@
 class FOBOARD: public BOARD
 {
  public:
-	FOBOARD(w32 basehex,int vsp);
-	FOBOARD(w32 basehex,int vsp,string const name);
+	FOBOARD(w32 basehex,int vsp,string const name = "fo");
 	void setTESTCLUSTER(w32 w){vmew(TEST_CLUSTER,w);};
 	int CheckCountersNoTriggers();
 	// FO counters start at 900

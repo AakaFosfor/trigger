@@ -17,7 +17,7 @@ public:
          void setssm(w32 *ssm);
          int genSeq(int Period,int Start);
 	 int write0();
-	 int writeSPP(int Start,int Skip,int Channel,char *Pattern);
+	 int writeSPP(int Start,int Skip,int Channel,const char *Pattern);
 	 int writeSPPOld(int Start,int Skip,int Channel,char *Pattern);
          int findOffset() const;
 	 int find0() const;
