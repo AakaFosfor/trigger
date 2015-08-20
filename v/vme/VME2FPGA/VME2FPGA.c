@@ -607,7 +607,7 @@ int MonitorStatus(w32 adresa, short **bity)
 }
 void PrintMon(int n,w32 *m,double time) {
  FILE *f;
- char *name[]={"RY/BU ","nSTATU","CONF_D","INIT_D","nCONFI","DCLK  "}; 
+ const char name[][7]={"RY/BU ","nSTATU","CONF_D","INIT_D","nCONFI","DCLK  "}; 
  int i,j;
  short bit; w32 pit;
  f=fopen("WORK/FPGA.mon","w");
