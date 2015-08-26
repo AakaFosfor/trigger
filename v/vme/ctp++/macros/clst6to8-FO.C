@@ -220,6 +220,7 @@ int main(int argc, char *argv[]) {
 	if (argc > 2) {
 		cout << "usage : " << argv[0] << " [past_snapshots_checked]" << endl;
 		cout << "  past_snapshots_checked - snapshots checked without error so far" << endl;
+		cout << "                         - can be -1: only read SSM, no analysis" << endl;
 		return EXIT_FAILURE;
 	}
 	
@@ -240,6 +241,10 @@ int main(int argc, char *argv[]) {
 		usleep(50000);
 		board->StopSSM();
 		board->ReadSSM();
+		if (pastSnapshots == -1) {
+			cout << "No analysis, just SSM read (" << snapshot << " reads so far)" << endl;
+			continue;
+		}
 		ssm = board->GetSSM()+SSM_OFFSET;
 		#ifdef POISON_OUTER
 			if ((snapshot % 3) == 2) {
