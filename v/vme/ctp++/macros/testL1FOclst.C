@@ -5,6 +5,9 @@ using namespace std;
 #include "L1BOARD.h"
 #include "FOBOARD.h"
 
+//#define DEBUG
+
+// size of SnapShot Memory (both generating/monitoring)
 #define SSM_SIZE (1024*1024)
 #define SSM_READ_OFFSET 5
 #define SSM_SENSE 10
@@ -33,6 +36,48 @@ using namespace std;
 #define L1_CLST6 7
 #define L1_CLST7 10
 #define L1_CLST8 11
+
+// how many consecutive patterns to search for to align for test start
+#define STRIKE 5
+
+const w32 patternSingle = 0x135E26BC;
+const int shifts[CLUSTERS] = {
+	0, 4, 8, 0, 14, 2, 2, 3
+};
+#define PATTERN_LENGTH 15
+unsigned int patterns[PATTERN_LENGTH] = {
+	0, 0, 0, 0, 0, 0, 0, 0,
+	0, 0, 0, 0, 0, 0, 0
+};
+
+void fillPattern() {
+	unsigned int word;
+	for (int i = 0; i < PATTERN_LENGTH; i++) {
+		word = 0;
+		for (int cluster = CLUSTERS-1; cluster >= 0; cluster--) {
+			word <<= 1;
+			word |= (patternSingle >> (31-(shifts[cluster]+i))) & 1;
+		}
+		patterns[i] = word;
+		#ifdef DEBUG
+			printf("patternID=%3d: 0x%03x, ", i, word);
+			cout << bitset<8>(word) << endl;
+		#endif
+	}
+}
+
+unsigned int LFSRpattern(unsigned int id) {
+	return patterns[id%PATTERN_LENGTH];
+}
+
+int getLFSRpatternID(unsigned int pattern) {
+	for (unsigned int id = 0; id < PATTERN_LENGTH; id++) {
+		if (pattern == patterns[id]) {
+			return id;
+		}
+	}
+	return -1;
+}
 
 unsigned int getClusters(w32 data) {
 	// FO:
@@ -120,11 +165,14 @@ void loadL1SSM() {
 	
 	ssm = l1->GetSSM();
 	for (int i = 0; i < SSM_SIZE; i++) {
-		ssm[i] = composeSSMWord(i);
-		// if (i < SSM_SENSE) {
-			// printf("[%5i] 0x%08x: ", i, ssm[i]);
-			// cout << "Clusters: " << bitset<8>(getClusters(ssm[i])) << endl;
-		// }
+		ssm[i] = composeSSMWord(LFSRpattern(i));
+		//ssm[i] = composeSSMWord((i==0) ? 1 : 0); // just one pulse on cluster 1 per SSM_SIZE
+		#ifdef DEBUG
+			if (i < SSM_SENSE) {
+				printf("[%5i] 0x%08x: ", i, ssm[i]);
+				cout << "Clusters: " << bitset<8>(getClusters(ssm[i])) << endl;
+			}
+		#endif
 	}
 	l1->WritehwSSM();
 	if (l1->SetMode("outgen", 'c')) {
@@ -137,33 +185,48 @@ void loadL1SSM() {
 unsigned int getFirstClusters(w32 *ssm) {
 	unsigned int clusters, hamming, computedHamming;
 	int strike = 0;
-	unsigned int pattern = 0;
+	int patternID = 0;
+	unsigned int firstPattern = 0;
 	
 	for (unsigned int i = 0; i < SSM_READ_SIZE; i++) {
+		// get all data
 		clusters = getClusters(ssm[i]);
 		hamming = getHamming(ssm[i]);
 		computedHamming = computeHamming(clusters);
+		// is parity OK?
 		if (hamming != computedHamming) {
+			// if not, start over again
 			strike = 0;
 			continue;
 		}
+		// parity is OK
 		if (strike == 0) {
-			pattern = 0xff&clusters;
-		} else {
-			pattern = 0xff&(pattern+1);
-		}
-		if (clusters != pattern) {
-			strike = 0;
-			pattern = 0xff&clusters;
-		} else {
+			// first in the row
+			patternID = getLFSRpatternID(clusters);
+			if (patternID == -1) {
+				// not usable pattern
+				continue;
+			}
 			strike++;
+			continue;
 		}
-		if (strike == 5) {
-			return 0xff&(clusters-i);
+		// next in the row
+		patternID = (patternID+1)%PATTERN_LENGTH;
+		if (getLFSRpatternID(clusters) != patternID) {
+			// not as expected, start over again
+			strike = 0;
+			continue;
+		}
+		strike++;
+		if (strike == STRIKE) {
+			// if STRIKE patterns in the row was as expected
+			firstPattern = (PATTERN_LENGTH + patternID - i) % PATTERN_LENGTH;
+			printf("Found pattern %d at position %d after %d valid entries, first pattern should be %d.\n", patternID, i, STRIKE, firstPattern);
+			return firstPattern;
 		}
 	}
 	fprintf(stderr, KRED "No usable pattern found in whole snapshot memory!!!" KNRM "\n");
-	return 0;
+	return firstPattern;
 }
 
 int main(int argc, char *argv[]) {
@@ -175,9 +238,12 @@ int main(int argc, char *argv[]) {
 	int multiErrors = 0;
 	int correctedClusters;
 	int i;
-	unsigned int predictedClusters;
+	unsigned int predictedClustersID;
 	int displaySimple, error, multiError;
+	unsigned int overflows = 0;
 	
+	fillPattern();
+
 	if ((argc > 1)) {
 		if ((strcmp(argv[1], "load") == 0)) {
 			loadL1SSM();
@@ -194,19 +260,31 @@ int main(int argc, char *argv[]) {
 	ssm = fo->GetSSM();
 	ssm += SSM_READ_OFFSET;
 
-	for (i = 0, predictedClusters = getFirstClusters(ssm); i < SSM_READ_SIZE; i++, predictedClusters=0xff&(predictedClusters+1)) {
+	for (i = 0, predictedClustersID = getFirstClusters(ssm); i < SSM_READ_SIZE; i++, predictedClustersID=(predictedClustersID+1)%PATTERN_LENGTH) {
 		// gather data
 		clusters = getClusters(ssm[i]);
 		hamming = getHamming(ssm[i]);
 		computedHamming = computeHamming(clusters);
 		correctedClusters = correctData(clusters, hamming);
+		
+		// correction for case when generating SSM_SIZE != n*PATTERN_LENGTH
+		if ((SSM_SIZE % PATTERN_LENGTH) != 0) {
+			if (clusters != LFSRpattern(predictedClustersID)) {
+				// possible SSM overflow
+				if ((getLFSRpatternID(clusters) == 0) && (predictedClustersID == (SSM_SIZE % PATTERN_LENGTH))) {
+					// possible SSM overflow according to actual/last clusters
+					predictedClustersID = 0;
+					overflows++;
+				}
+			}
+		}
 
 		// check status
 		displaySimple = (hamming == computedHamming);
 		error = (hamming != computedHamming);
 		multiError =
-			(displaySimple && (clusters != predictedClusters)) ||
-			(error && (correctedClusters >= 0) && ((unsigned int)correctedClusters != predictedClusters));
+			(displaySimple && (clusters != LFSRpattern(predictedClustersID))) ||
+			(error && (correctedClusters >= 0) && ((unsigned int)correctedClusters != LFSRpattern(predictedClustersID)));
 		
 		// count states
 		if (error) errors++;
@@ -237,7 +315,7 @@ int main(int argc, char *argv[]) {
 		}
 		if (multiError) {
 			printf(KMAG "\n          Unexpected (corrected) clusters! Multiple errors?");
-			cout << " Predicted clusters: " << bitset<8>(predictedClusters);
+			cout << " Predicted clusters: " << bitset<8>(LFSRpattern(predictedClustersID));
 		}
 		if (displaySimple && !multiError) {
 			dispayed++;
@@ -247,6 +325,11 @@ int main(int argc, char *argv[]) {
 	
 	printf("\nTotal errors: %i\n", errors);
 	printf("Total multi(?) errors: %i\n", multiErrors);
+	printf("Total SSM overflows: %i", overflows);
+	if (overflows > 1) {
+		printf(KRED " Should be <= 1 !!!" KNRM);
+	}
+	printf("\n");
 
 	return EXIT_SUCCESS;
 }
