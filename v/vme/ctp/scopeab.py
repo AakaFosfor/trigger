@@ -436,6 +436,9 @@ class ABsig:
       defaultinx=selsignal, side=LEFT, items=ABsig.signals[self.boardsig],
       cmd=self.modsignal)
     if self.updateSWLED:
+      if self.updateSWLED[self.boardix]==None:
+        print "Board " + self.ctpboards[self.boardix] + " is not in crate!"
+        return
       self.updateSWLED[self.boardix](self.ab,
         ABsig.signals[self.boardsig][selsignal][0])
   def modsignal(self,inst,ix):
@@ -443,6 +446,9 @@ class ABsig:
     #ABsig.signals[self.boardsig][ix][1]
     selsig= self.findSignal(ix)
     if self.updateSWLED:
+      if self.updateSWLED[self.boardix]==None:
+        print "Board " + self.ctpboards[self.boardix] + " is not in crate!"
+        return
       self.updateSWLED[self.boardix](self.ab,
         ABsig.signals[self.boardsig][selsig][0])
   #def getsigname(self, esi):
