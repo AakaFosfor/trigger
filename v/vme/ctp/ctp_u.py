@@ -46,7 +46,9 @@ def ScopeAB(vb):
         # find signame for board ix:
         siga= scopeab.findSigOnBoard(vb, ix, "A")
         #print "sigab2:", siga
-        if siga==-1: continue
+        if siga==-1:
+          swleds.append(None)
+          continue
         sigb= scopeab.findSigOnBoard(vb, ix, "B")
         #print "sigab:", siga, sigb
         aname=scopeab.getSigNameOnBoard(ix, "A", siga)[0]
