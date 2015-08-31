@@ -1,4 +1,7 @@
+#include <stdexcept>
+
 #include "BOARD.h"
+
 std::vector<string> BOARD::AllCounterNames;
 
 BOARD::BOARD(string const name,w32 const boardbase,int vsp,int nofssmmodes)
@@ -159,6 +162,32 @@ void BOARD::printCountersDiff()
    if(countdiff[i]) printf("%s %i %u \n",CounterNames[i].c_str(),i,countdiff[i]);
  }
 }
+
+int BOARD::getCounterId(const char *name) {
+	// TODO: make better implementation (hashmap?)
+	for (int i = 0; i < NCounters; i++) {
+		if (!CounterNames[i].compare(name)) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+w32 BOARD::getCounterValue(unsigned int id) {
+	if (id >= NCOUNTERS_MAX) {
+		throw std::out_of_range("Counter ID out of range.");
+	} 
+	return counters2[id];
+}
+
+w32 BOARD::getCounterValue(const char *name) {
+	int id = getCounterId(name);
+	if (id == -1) {
+		throw "Counter not found!";
+	}
+	return getCounterValue(id);
+}
+
 //---------------------------------------------------------------------------
 string *BOARD::GetChannels(string const &mode) const
 {
