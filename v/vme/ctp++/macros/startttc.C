@@ -1,6 +1,6 @@
 #include "TTCITBOARD.h"
 int main(){
- w32 err=0;
+ //w32 err=0;
  //CTP ctp;
  int vmesp=-1;
  string boardname("ttcit");

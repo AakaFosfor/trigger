@@ -1,7 +1,7 @@
 #include "TTCITBOARD.h"
 #include "libctp++.h"
 int main(){
- w32 err=0;
+ //w32 err=0;
  int NN=10000000;
  int vmesp=-1;
  string boardname("ttcit");
