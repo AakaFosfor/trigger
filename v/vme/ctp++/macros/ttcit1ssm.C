@@ -1,6 +1,6 @@
 #include "TTCITBOARD.h"
 int main(){
- w32 err=0;
+ //w32 err=0;
  int vmesp=-1;
  string boardname("ttcit");
  TTCITBOARD *ttc= new TTCITBOARD(boardname.c_str(),0x8a0000,vmesp);
@@ -9,7 +9,8 @@ int main(){
  printf("Version: 0x%x %i\n",ver,ver);
  ttc->start_stopSSM();
  ttc->Dump2quSSM();
- int ret=ttc->AnalyseSSM();
+ //int ret=ttc->AnalyseSSM();
+ ttc->AnalyseSSM();
  ttc->DumptxtSSM();
  return 0;
 }
