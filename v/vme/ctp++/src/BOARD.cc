@@ -188,6 +188,25 @@ w32 BOARD::getCounterValue(const char *name) {
 	return getCounterValue(id);
 }
 
+#define TEMP_START    0x58
+#define TEMP_STATUS   0x5c
+#define TEMP_READ     0x60
+
+int BOARD::getTemperature() {
+	w32 status, temp;
+
+	vmew(TEMP_START, NULL);
+	for(int i = 0; i < 3; i++) {
+		usleep(1000);
+		status = vmer(TEMP_STATUS);
+		if ((status & 0x1) == 0) {
+			temp = vmer(TEMP_READ) & 0xff;
+			return temp;
+		}
+	};
+	return 1000;
+}
+
 //---------------------------------------------------------------------------
 string *BOARD::GetChannels(string const &mode) const
 {

@@ -26,6 +26,7 @@ public:
 	int getCounterId(const char *name);
 	w32 getCounterValue(unsigned int id);
 	w32 getCounterValue(const char *name);
+	int getTemperature();
 	virtual int CheckCountersNoTriggers(){return 0;};
 	
 	// SSM
