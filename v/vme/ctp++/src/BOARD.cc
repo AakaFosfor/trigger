@@ -165,7 +165,8 @@ void BOARD::printCountersDiff()
 
 int BOARD::getCounterId(const char *name) {
 	// TODO: make better implementation (hashmap?)
-	for (int i = 0; i < NCounters; i++) {
+	int size = CounterNames.size();
+	for (int i = 0; i < size; i++) {
 		if (!CounterNames[i].compare(name)) {
 			return i;
 		}
