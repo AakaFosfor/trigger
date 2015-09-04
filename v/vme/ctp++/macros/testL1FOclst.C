@@ -233,9 +233,9 @@ int main(int argc, char *argv[]) {
 	FOBOARD *fo;
 	w32 *ssm;
 	unsigned int clusters, hamming, computedHamming;
-	int dispayed = 0;
-	int errors = 0;
-	int multiErrors = 0;
+	unsigned long long int dispayed = 0;
+	unsigned long long int errors = 0;
+	unsigned long long int multiErrors = 0;
 	int correctedClusters;
 	int i;
 	unsigned int predictedClustersID;
@@ -304,6 +304,7 @@ int main(int argc, char *argv[]) {
 		cout << "Clusters: " << bitset<8>(clusters);
 		cout << ", Hamming: " << bitset<4>(hamming);
 		cout << ", Computed Hamming: " << bitset<4>(computedHamming);
+		cout << ", flags: " << (displaySimple?"S1":"S0") << (error?"E1":"E0") << (multiError?"M1":"M0");
 		if (error) {
 			printf("  " KRED "Error in Hamming!");
 			if (correctedClusters == -1) {
@@ -323,8 +324,8 @@ int main(int argc, char *argv[]) {
 		printf(KNRM "\n");
 	}
 	
-	printf("\nTotal errors: %i\n", errors);
-	printf("Total multi(?) errors: %i\n", multiErrors);
+	printf("\nTotal errors: %llu\n", errors);
+	printf("Total multi(?) errors: %llu\n", multiErrors);
 	printf("Total SSM overflows: %i", overflows);
 	if (overflows > 1) {
 		printf(KRED " Should be <= 1 !!!" KNRM);

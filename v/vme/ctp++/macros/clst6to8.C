@@ -213,7 +213,7 @@ int main(int argc, char *argv[]) {
 	double errorRate, berCL, berS, iFact;
 	char oper;
 	unsigned long long snapshot;
-	unsigned long long pastSnapshots = 0;
+	long long pastSnapshots = 0;
 	unsigned long long totalBits;
 	unsigned long long i;
 	
