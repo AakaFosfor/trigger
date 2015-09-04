@@ -674,7 +674,7 @@ fol0clstt	-L0 test cluster trigger
 fol1clstt	-L1 test cluster trigger""")
       self.makeit1(fona,fona+"l0clst", CTPcnts.i16, "L0 cluster1-8 trigger")
       self.makeit1(fona,fona+"l1clst", CTPcnts.i16, "L1 cluster1-8 trigger")
-      self.makeit1(fona,"Hamming errors", (fona+"l0hamming_error", fona+"l1hamming_error"), "Hamming errors on input links")
+      self.makeit1(fona,"Errors", (fona+"l0hamming_error", fona+"l1hamming_error", fona+"bcerror"), "Various errors")
       self.makeit1(fona,fona+"glitch", CTPcnts.iT6, "Glitch for cluster T,1-8")
       self.makeit1(fona,fona+"l1spurious", CTPcnts.iT6, "L1spurious cluster T,1-8")
       self.makeit1(fona,fona+"ppout", CTPcnts.i14, "PP output 1-4")
@@ -980,6 +980,9 @@ orc_error  -Orbit record with error
     elif self.findFO(cntlabel,"l1hamming_error"):
       foix= self.findFO(cntlabel,"l1hamming_error")
       board="fo"; n= 38+FOSH+(foix-1)*NCOUNTERS_FO
+    elif self.findFO(cntlabel,"bcerror"):
+      foix= self.findFO(cntlabel,"bcerror")
+      board="fo"; n= 39+FOSH+(foix-1)*NCOUNTERS_FO
     elif self.findFO(cntlabel,"ppi"):
       foix= self.findFO(cntlabel,"ppi")
       board="fo"; n= 40+FOSH+(foix-1)*NCOUNTERS_FO   #run1:29
@@ -1152,7 +1155,7 @@ orc_error  -Orbit record with error
       butlab=="l1timers" or butlab=="l2timers" or\
       butlab=="bytimers" or butlab=="bycounters" or\
       butlab=="inttimers" or butlab=="intcounters" or\
-      butlab=="Strobes,ESR" or butlab=="Hamming errors" or\
+      butlab=="Strobes,ESR" or butlab=="Errors" or\
       butlab=="Strobes" or\
       self.findFO(butlab,"others")!=None:
       return 1
