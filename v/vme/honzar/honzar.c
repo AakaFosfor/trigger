@@ -9,7 +9,7 @@
 #define DW_CHECKER_RESET      0x010
 #define CLOCK_DELAY           0x014
 #define DATA_DELAY            0x018
-//#define XXXXXXXXXXX           0x01C
+#define SCOPE_CLOCK           0x01C
 #define SCOPE_DATA            0x020
 #define CHECKER_SCOPE         0x024
 #define START_COUNT           0x028

@@ -20,7 +20,8 @@ counter_s counters[] = {
 	{BL1, "l1temp"},
 	{BFO1, "fo1temp"},
 	{BBUSY, "busytemp"},
-	{BBUSY, "byl0hamming_error"}
+	{BBUSY, "byl0hamming_error"},
+	{BBUSY, "bytime"}
 };
 
 BOARD *getBoard(CTP *ctp, boards_e board) {

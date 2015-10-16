@@ -4,7 +4,6 @@ using namespace std;
 
 #include "L1BOARD.h"
 #include "FOBOARD.h"
-
 //#define DEBUG
 
 // size of SnapShot Memory (both generating/monitoring)
@@ -28,14 +27,28 @@ using namespace std;
 #define KCYN  "\x1B[36m"
 #define KWHT  "\x1B[37m"
 
-#define L1_CLST1 2
-#define L1_CLST2 3
-#define L1_CLST3 4
-#define L1_CLST4 5
-#define L1_CLST5 6
-#define L1_CLST6 7
-#define L1_CLST7 10
-#define L1_CLST8 11
+#define L1CLST1BIT 2
+#define L1CLST2BIT 3
+#define L1CLST3BIT 4
+#define L1CLST4BIT 5
+#define L1CLST5BIT 6
+#define L1CLST6BIT 7
+#define L1CLST7BIT 10
+#define L1CLST8BIT 11
+
+#define L1CLST1 (1<<L1CLST1BIT)
+#define L1CLST2 (1<<L1CLST2BIT)
+#define L1CLST3 (1<<L1CLST3BIT)
+#define L1CLST4 (1<<L1CLST4BIT)
+#define L1CLST5 (1<<L1CLST5BIT)
+#define L1CLST6 (1<<L1CLST6BIT)
+#define L1CLST7 (1<<L1CLST7BIT)
+#define L1CLST8 (1<<L1CLST8BIT)
+#define L1CLSTT (1<<L1CLSTTBIT)
+
+#define MASK (L1CLST1 | L1CLST2 | L1CLST3 | L1CLST4 | L1CLST5 | L1CLST6 | \
+				L1CLST7 | L1CLST8 | L1CLSTT)
+
 
 // how many consecutive patterns to search for to align for test start
 #define STRIKE 5
@@ -159,14 +172,18 @@ int correctData(unsigned int data, unsigned int hamming) {
 void loadL1SSM() {
 	L1BOARD *l1;
 	w32 *ssm;
+	int x = 0;
 
 	l1 = new L1BOARD(-1);
 	l1->StopSSM();
 	
 	ssm = l1->GetSSM();
 	for (int i = 0; i < SSM_SIZE; i++) {
-		ssm[i] = composeSSMWord(LFSRpattern(i));
+		//ssm[i] = composeSSMWord(LFSRpattern(i));
 		//ssm[i] = composeSSMWord((i==0) ? 1 : 0); // just one pulse on cluster 1 per SSM_SIZE
+		//ssm[i] = composeSSMWord(((i%112) == 0) ? -1 : 0); // just one pulse on all clusters every 112 BC
+		//ssm[i] = composeSSMWord(((i%112) == 0) ? 1 : (((i%112) == 56) ? (1<<6) : 0)); // just one pulse on cluster 1 every 112 BC
+		ssm[i] = composeSSMWord(((i%112) == 0) ? LFSRpattern(x++) : 0); // just one pattern every 112 BC
 		#ifdef DEBUG
 			if (i < SSM_SENSE) {
 				printf("[%5i] 0x%08x: ", i, ssm[i]);
