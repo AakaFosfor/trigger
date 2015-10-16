@@ -41,17 +41,20 @@ create ctp_config file (with each run?)
 #import os, os.path
 #PYTHONPATH=os.environ['VMEBDIR']+':'+\
 #  os.path.join(os.environ['VMECFDIR'],'TRG_DBED')
-import os, os.path, string, sys, time, shutil, parted, pylog, miclock,threading, subprocess
-miclock.mylog= pylog.Pylog("pydim_shift")
+import os, os.path, string, sys, time, shutil, parted, pylog, threading, subprocess
+#import miclock
+#miclock.mylog= pylog.Pylog("pydim_shift")
 mylog= pylog.Pylog(info="info")
 VERSION= "7"
 def tasc():
   lt= time.localtime()
   ltim= "%2.2d.%2.2d.%4.4d %2.2d:%2.2d:%2.2d"%(lt[2], lt[1], lt[0], lt[3], lt[4], lt[5])
   return ltim
-def checkShift():
-  cshift= miclock.getShift()
-  print tasc()+" resetclock: check after 5secs:"+ cshift
+
+# not supported in run2:
+#def checkShift():
+#  cshift= miclock.getShift()
+#  print tasc()+" resetclock: check after 5secs:"+ cshift
 
 class CNSO:
   def __init__(self, starts):
@@ -84,7 +87,7 @@ def main():
       #pitdes= os.path.join( os.environ['CLRFS'], "alidcsvme001/home/alice/trigger/v/vme/WORK/RCFG")
     elif os.environ['VMESITE'] == 'PRIVATE':
       copyit=True ; acchost='localhost'
-      strict= "strict"
+      strict= None
   executable= os.path.join( os.environ['VMECFDIR'],"pydim","linux_s","server")
   #io= popen2.popen2(executable+" CTPRCFG RCFG",1) #0- unbuffered, 1-line buffered
   print "ver: %s Popen %s..."%(VERSION,executable)
@@ -142,7 +145,7 @@ def main():
       if cmd[0]=='pcfg':
         #note: .partition file was downloaded directly in server.c
         # from ACT if present!
-        part= parted.TrgPartition(partname, strict="strict")
+        part= parted.TrgPartition(partname, strict=strict)
         part.prt()
         print "%s part.loaderrors:"%tasc(),part.loaderrors
         print "%s part.loadwarnings:"%tasc(),part.loadwarnings
@@ -152,6 +155,10 @@ def main():
         if part.loaderrors=='':
           part.savepcfg(wdir=parted.WORKDIR)   # without 'rcfg '
           pts[partname]= part   # store for rcfg phase only if no load errors
+          # following seems ok even before savercfg (to be checked):
+          inpdets= part.prtInputDetectors(hexs="yes")    # ret: effout inpdets
+          print "after savepcfg indets effectively out:", inpdets, runnumber
+          io[1].write("indets %s %s\n"%(runnumber, inpdets))
         else:
           f= open( os.path.join( parted.WORKDIR,fname), "w")
           f.write("Errors:\n") ; f.write(part.loaderrors) ; f.close()
@@ -217,24 +224,21 @@ def main():
     elif cmd[0]=='rcfgdel':
       if len(cmd)==3:   #rcfgdel partname NNN or ALL 0xc606 or reload 0xc606
         #if (cmd[2]=='0') and (cmd[1]=='ALL'):   #rcfgdel ALL 0, i.e. ctpproxy restarted
-        if (cmd[1]=='ALL') or (cmd[1]=='reload'):   
+        if cmd[1]=='ALL':
           #rcfgdel ALL 0xc606, i.e. ctpproxy restarted
           #rcfgdel reload   -in case there are no paritions in ctpproxy (needed to update BC masks)
           import glob
-          if cmd[1]=='ALL':
-            FPGAVERSION= cmd[2]
-            #os.putenv('FPGAVERSION', FPGAVERSION)  nebavi (copy of environ)
-            os.environ['FPGAVERSION']= FPGAVERSION
-            print "%s reloading parted (ctpproxy restarted) FPGA:%s..."%\
-              (tasc(), FPGAVERSION)
-          else:
-            print "%s reloading parted (reload request from ctpproxy)..."%(tasc())
-          if len(pts)!=0: 
-            print "ERROR partition list not empty:", pts.keys()
-          pts= {}
+          FPGAVERSION= cmd[2]
+          #os.putenv('FPGAVERSION', FPGAVERSION)  nebavi (copy of environ)
+          os.environ['FPGAVERSION']= FPGAVERSION
+          print "%s reloading parted (ctpproxy restarted) FPGA:%s..."%\
+            (tasc(), FPGAVERSION)
           #import parted   # nepomohlo
           reload(parted)
           parted.initparted()
+          if len(pts)!=0: 
+            print "ERROR partition list not empty, rcfg not received for last:", pts.keys()
+          pts= {}
           os.chdir("RCFG")
           rnames= glob.glob('*.rcfg')
           if len(rnames)>0:
@@ -242,6 +246,11 @@ def main():
             print "delmeh:", str(rnames)
             os.system(mvcmd)
           os.chdir("../")
+        elif cmd[1]=='reload':
+            print "%s reloading parted (reload request from ctpproxy)..."%(tasc())
+            #import parted   # nepomohlo
+            reload(parted)
+            parted.initparted()
         else:
           rn= parted.dorcfgname(cmd[2], "rcfg")
           if os.path.exists(rn):
@@ -262,11 +271,14 @@ def main():
     elif cmd[0]=='INFO' or cmd[0]=='ERROR':
       #print line
       pass
+    elif cmd[0]=='ERROR':
+      print line
+      pass
     elif cmd[0]=='resetclock':
       # adjust clock shift: correct any shift
       # resetclock is called from ctp_proxy, when PHYSICS_1 started.
       # 3.6.2015: removed from ctp_proxy( i.e. should not be called)
-      print "resetclock: no supported in run2 yet"
+      print "resetclock: not supported in run2 yet"
       resetclock="""
       cshift= miclock.getShift()
       if cshift != "old":

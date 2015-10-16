@@ -41,7 +41,7 @@ extern "C" {
 #define l0timeix 15   // run1:13
 
 int ARGNORRD=0;
-FILE *rrdpipe;
+FILE *rrdpipe=NULL;
 FILE *htmlpipe;
 //FILE *dbgout=NULL;
 FILE *spurfile=NULL;
@@ -99,6 +99,7 @@ Tcnt1 l2s[N24];   // 24 l2strobes, the same order as in VALID.LTUS
 Tcnt1 l2r[N24];   // 24 l2reject, the same order as in VALID.LTUS
 Tcnt1 ppout[N24];   // 24 ppouts, not for each reading
 Tcnt1 l2cal[N24];   // 24 ppouts, as l0s, but not for each reading
+Tcnt1 intCTPbusy;
 typedef struct {
   int absy[WHATBUSYS];  // avbsyl0s, avbsyl2s(till Oct. 2012) -will be l2as, avreadout
 } Tavbsy;
@@ -267,6 +268,10 @@ while(1) {
     printf("parseLine rc: %d line:%s\n", rc, line);
     break;
   };
+  if(strncmp(pl.cname, "intCTPbusy", 10)==0) {
+     intCTPbusy.reladdr= pl.addr;
+     continue;
+  };
   //if(pl.addr>3) break;
   // look for: byin1..byin24:
   isdet= isDetector(pl.ltuname);
@@ -366,7 +371,7 @@ printf("%s %17.6f: %d counters\n", dmyhms, timesecs, *size/4); fflush(stdout);
 timedelta= dodif32(prevl0time, bufw32[l0timeix]);  // in 0.4micsecs
 prevl0time= bufw32[l0timeix];
 measnum++; if(measnum>=10) measnum=1;
-
+printf("intCTPbusy:%d:%d\n", intCTPbusy.reladdr, bufw32[intCTPbusy.reladdr]);
 /*------------------------------------------------------------ rrd */
 if(rrdpibuready==0) {
   //fprintf(rrdpipe, "update rrd/ctpcounters.rrd ");
@@ -417,6 +422,7 @@ if(rrdpibuready==0) {
 };
 epoch2date(bufw32[epochsecs], dat);
 printf("epoch: %s\n", dat);
+printf("busytemp:%d l0temp:%d\n", bufw32[1514], bufw32[1516]);
 
 /*------------------------------------------------------------ html */
 sprintf(htmlline, "%s %s minute ", WHATBUSY[avbsyix], dat);
@@ -511,8 +517,8 @@ if(bufw32[epochsecs]==0) {
 } else {
   /*int inforc;
   inforc= ftell(htmlpipe); printf("ftell:%d\n", inforc); always -1 */
-  fprintf(htmlpipe, htmlline);
-  printf(htmlline);
+  fwrite(htmlline, strlen(htmlline), 1, htmlpipe);   //fprintf(htmlpipe, htmlline);
+  printf("%s", htmlline);
 };
 /*------------------------------------------------------------ gcalib 
 for LTUs: TOF MUON_TRG T0 ZDC EMCAL. Attention: MUON_TRG cal. rate; 1/33secs
@@ -579,8 +585,8 @@ if(strncmp(&spurfilename[0], &dat[0], 2) != 0) {        //every day
   };
 };
 if(spurfile) {
-  int ixx;
-  sprintf(spurline, "%s", dat); ixx=0;
+  //int ixx;
+  sprintf(spurline, "%s", dat); //ixx=0;
   for(ix=0; ix<=(NCOUNTERS-1); ix++) {
     /*if(ix == spurcnts[ixx]) {
       sprintf(spurline, "%s %d", spurline, bufw32[ix]);
@@ -621,15 +627,19 @@ hname= getenv("HOSTNAME");
 //setbuf(stdout, NULL);   nebavi
 initbusyl0s();
 //return(0);
-rrdpipe= openrrd();
-if(rrdpipe==NULL) {
-  printf("Cannot open /usr/bin/rrdtool -\n");
-  exit(8);
+if(ARGNORRD==1) {
+  printf("skipping openrrd(..., -norrd\n");
+} else {
+  rrdpipe= openrrd();
+  if(rrdpipe==NULL) {
+    printf("Cannot open /usr/bin/rrdtool -\n");
+    exit(8);
+  };
+  //nebavi asi htmlpipe= popen("python ./htmlCtpBusys.py stdin >logs/htmlCtpBusys.log", "w");
+  //? htmlpipe= popen("./htmlCtpBusys.py stdin", "w");
+  printf("%s rrdpipe OPENED. Opening /tmp/htmlfifo (will wait for htmlCtpBusy daemon running)...\n", hname);
 };
 rrdpibuready=0;
-//nebavi asi htmlpipe= popen("python ./htmlCtpBusys.py stdin >logs/htmlCtpBusys.log", "w");
-//? htmlpipe= popen("./htmlCtpBusys.py stdin", "w");
-printf("%s rrdpipe OPENED. Opening /tmp/htmlfifo (will wait for htmlCtpBusy daemon running)...\n", hname);
 htmlpipe= fopen("/tmp/htmlfifo", "w");    // mkfifo /tmp/htmlfifo
 // waiting on the above open until htmlCtpBusy is not started
 if(htmlpipe==NULL) {
@@ -670,7 +680,7 @@ while(1) {
     rrdpibuready=0;
   };
 };
-pclose(rrdpipe); 
+if(rrdpipe) pclose(rrdpipe); 
 //pclose(htmlpipe);
 //fclose(dbgout);
 dic_release_service(inforc);

@@ -71,9 +71,12 @@ Tinstver insver[6];
 
 int ignoreDAQLOGBOOK=0;
 
+// do not have to go to insver -needed immediately in Dorcfg after pcfg received
+unsigned int effiout=0xdeadbeaf, indets=0xdeadbeaf;   
+
 #define MAXCIDAT 80
 #define MAXINT12LINE 100
-int INT1id, INT2id, CSid, CNAMESid, CTPRCFGRCFGid, CTPRCFGid,LTUCFGid,C2Did;
+int INT1id, INT2id, CSid, CNAMESid, CTPRCFGRCFGid, CTPRCFGid,LTUCFGid,C2Did,SETBMid;
 char INT1String[MAXINT12LINE]="int1 source";
 char INT2String[MAXINT12LINE]="int2 source";
 #define MAXCSString 80000
@@ -94,6 +97,7 @@ dis_remove_service(CTPRCFGRCFGid);
 dis_remove_service(CTPRCFGid);
 dis_remove_service(LTUCFGid);
 dis_remove_service(C2Did);
+dis_remove_service(SETBMid);
 dis_remove_service(INT1id);
 dis_remove_service(INT2id);
 dis_remove_service(CSid);
@@ -165,6 +169,16 @@ for(ix=0; ix<6; ix++) {
 };
 return(rc);
 }
+/*----------------------------------------------------------- updeff_insver
+rc:-1 not found
+
+int updeff_insver(int runn, int effio) {
+int ix, rc=-1;
+for(ix=0; ix<6; ix++) {
+  if(insver[ix].runn==runn) {rc= ix; insver[ix].effio= effio; };
+};
+return(rc);
+}*/
 /*----------------------------------------------------------- del_insver
 */
 void del_insver(int runn) {
@@ -286,7 +300,7 @@ if(xpid[0]=='\0') {
 /*--------------------*/ void DOrcfg(void *tag, void *bmsg, int *size)  {
 // bmsg: binary message TDAQInfo
 TDAQInfo *dain; int rc; unsigned int rundec; char pname[40];
-printf("INFO Dorcfg len:%d %lu\n", *size,sizeof(TDAQInfo));
+//printf("INFO DOrcfg len:%d %lu\n", *size,sizeof(TDAQInfo));
 if(*size != sizeof(TDAQInfo)){
  char emsg[ERRMSGL];
  sprintf(emsg, "DOrcfg: Structure dim size different from command size.");
@@ -296,11 +310,17 @@ if(*size != sizeof(TDAQInfo)){
 } 
 dain= (TDAQInfo *)bmsg;
 //printTDAQInfo(dain);
-printf("INFO DOrcfg msg:%s\n", dain->run1msg); 
+printf("INFO DOrcfg msg:%s", dain->run1msg); 
 rc= getname_rn(dain->run1msg, pname, &rundec);
 if(check_xcounters()) return;
 if(rc==0) {
-  rc= daqlogbook_update_clusters(rundec, pname, dain, ignoreDAQLOGBOOK);
+  //printf("INFO effiout:0x%x\n", effiout);
+  /*new from aug2015: effiout: bit pattern of inp. detectors effectively filtered out
+    not used: prepared if DAQ wants in future 'per cluster' -in that case 'per cluster' info
+   -should by passed in TDAQInfo structure from ctp proxy (now it is not) or
+   -somehow, pydimserver.py should deliver 'per cluster' (now delivering 'per partition')
+  */
+  rc= daqlogbook_update_clusters(rundec, pname, dain, ignoreDAQLOGBOOK); //, effiout);
   printf("INFO Dorcfg rc=%i \n",rc);
   //printf("%s",dain->run1msg); fflush(stdout);  moved down
   if(rc==0) { // inputs -> DAQ
@@ -384,6 +404,60 @@ if(errmsg[0]!='\0') {
   printf("ERROR DOcom2daq:%s:%s\n",errmsg, line);
 };
 }
+/*--------------------*/ void DOsetbm(void *tag, void *msg, int *size)  {
+// msg: beammode_number beammode
+int ixl, bmN; char errmsg[200]="";
+char *line;
+#define MAXBM 50
+char value[MAXBM];
+char beammode[MAXBM];
+enum Ttokentype t1;
+line= (char *)msg;
+printf("INFO DOsetbm len:%d m:%s\n", *size, line); 
+if(*size > MAXBM) {
+  printf("ERROR too long msg for DOsetbm\n"); return;
+};
+ixl=0; t1= nxtoken(line, value, &ixl);   // beammodeN
+if(t1==tINTNUM) {
+  int ic; w32 maxbml;
+  maxbml= strlen("INJECTION PHYSICS BEAM");
+  bmN= str2int(value);
+  cshmSetBM(bmN);
+  /*t1= nxtoken(line, value, &ixl);   // beammode text till the EOL
+  if(t1==tSYMNAME) { */
+  for(ic=0; ic<(MAXBM-1); ic++) {
+    if(((line[ixl+ic]) == '\n') ||
+       ((line[ixl+ic]) == '\0') ||
+       ((ixl+ic)>= (*size) ) ) {
+      value[ic]= '\0';
+      break;
+    };
+    value[ic]= line[ixl+ic];
+  };
+  printf("INFO BEAMMODE:%s=%d (set in shm)\n", value, bmN);
+  if(strlen(value) <= maxbml) {
+    strcpy(beammode, value); // not used yet anyhow
+    /*t1= nxtoken(line, value, &ixl);   // message
+    if(t1==tSTRING) {
+      int rcdl;
+      rcdl= daqlogbook_add_comment(0,beammode,value);
+      printf("INFO DAQlogbook comment: %d %s %s rc:%d\n",
+        bmN, beammode, value,rcdl);
+    } else {
+      strcpy(errmsg,"Bad message (\"string\" expected)");
+    };*/
+  } else {
+    strncpy(beammode, value, maxbml); // not used yet anyhow
+    beammode[maxbml]='\0';
+    strcpy(errmsg,"beammode too long (longest one:INJECTION PHYSICS BEAM)");
+  };
+} else {
+  strcpy(errmsg,"Bad beam mode number (int expected)");
+};
+if(errmsg[0]!='\0') {
+  printf("ERROR DOsetbm:%s:%s\n",errmsg, line);
+};
+}
 /*--------------------*/ void DOcmd(void *tag, void *msg, int *size)  {
 /* msg: string finished by "\n\0" */
 //printf("DOcmd: tag:%d size:%d msg:%s<-endofmsg\n", *tag, *size,msg);
@@ -445,11 +519,11 @@ if((strncmp(mymsg,"pcfg ",5)==0) || (strncmp(mymsg,"Ncfg ",5)==0)) {
     rc=actdb_getPartition(pname,filter, instname, version);
     //actdb_close();
     if(rc==0) {
-      sprintf(emsg,"%s (run:%d inst:%s ver:%s) downloaded from ACT.", 
+      sprintf(emsg,"INFO %s (run:%d inst:%s ver:%s) downloaded from ACT.", 
         pname, rundec, instname, version); 
       infoerr=LOG_INFO;
     } else if(rc==1) {
-      sprintf(emsg,"%s (run:%d) not found in ACT, might be OK if shift leader disabled it in ACT (i.e. is in 'Local File' mode)", pname, rundec); 
+      sprintf(emsg,"ERROR %s (run:%d) not found in ACT, might be OK if shift leader disabled it in ACT (i.e. is in 'Local File' mode)", pname, rundec); 
       infoerr=LOG_ERROR;
     } else {
       sprintf(emsg,"actdb_getPartition(%s) run:%d rc:%d (-2: partition not available in ACT)", pname,rundec,rc); 
@@ -504,14 +578,17 @@ if((strncmp(mymsg,"pcfg ",5)==0) || (strncmp(mymsg,"Ncfg ",5)==0)) {
   if(rcdaq==-1) {
     printf("ERROR DAQlogbook_close failed\n");
   };
+  cshmSetGlobFlag(FLGignoreDAQLOGBOOK);
 } else if((strncmp(mymsg,"rcfgdel useDAQLOGBOOK",20)==0)) {
   int rcdaq;
   rcdaq= daqlogbook_open(); //rcdaq=0;
   if(rcdaq!=0) {
     printf("ERROR DAQlogbook_open failed rc:%d",rcdaq);
     ignoreDAQLOGBOOK=1;
+    cshmSetGlobFlag(FLGignoreDAQLOGBOOK);
   } else {
     ignoreDAQLOGBOOK=0;
+    cshmClearGlobFlag(FLGignoreDAQLOGBOOK);
   };
 } else if((strncmp(mymsg,"rcfgdel ALL 0x...",11)==0)) {   //ctpproxy [re]start
   //int irc;
@@ -667,7 +744,7 @@ update following info in DAQlogbook::
 - partition instance name/version (was sent in time of .pcfg)
 */
 void updateConfig(int runn, char *pname, char *instname, char *instver) {
-int rc, rl;
+int rc, rl; int bm; w32 globflags;
 char *mem; char *environ, *envWORK;
 char cfgname[200], aliname[200], itemname[200];
 char emsg[1000];
@@ -682,7 +759,7 @@ if(strcmp(environ,"ALICE")==0) {
 } else if(strcmp(environ,"SERVER")==0) {
   strcpy(aliname, "/home/dl6/snapshot/altri1/home/alice/trigger/v/vme/WORK/");
 } else {
-  printf("ERROR bad VMESITE env. var:%s using WORKDIR/WORK",environ);
+  printf("INFO strange VMESITE env. var:%s using WORKDIR/WORK\n",environ);
   sprintf(aliname, "%s/WORK/", envWORK);
 };
 strcat(aliname, "alignment2daq");
@@ -691,11 +768,12 @@ if(alignment=='\0') {
   infolog_trg(LOG_FATAL, "Alignment info in DAQlogbook is empty");
   printf("ERROR Alignment info in DAQlogbook is empty");
 };
-printf("INFO alignment file len:%d\n",rl);
+printf("INFO alignment file len:%d (MAX:%d)\n",rl, MAXALIGNMENTLEN );
 sprintf(cfgname,"%s/WORK/RCFG/r%d.rcfg", envWORK, runn);
 mem= (char *)malloc(MAXRCFGLEN+1); mem[0]='\0';
 rl= readdbfile(cfgname, mem, MAXRCFGLEN); mem[rl]='\0';
-printf("INFO %s file len:%d\n",cfgname, rl);
+printf("INFO %s rcfg file len:%d (MAXlen:%d)\n",cfgname, rl, MAXRCFGLEN );
+printf("INFO ctpshmbase2:%p\n", ctpshmbase);
 if(rl < 10) {
   sprintf(emsg, "updateConfig: File: %s read error\n",cfgname); 
   infolog_trg(LOG_FATAL, emsg);
@@ -703,7 +781,8 @@ if(rl < 10) {
 } else {  
   if(ignoreDAQLOGBOOK) { rc=0;}
   else {
-    rc= daqlogbook_update_triggerConfig(runn, mem, alignment);
+    rc= daqlogbook_update_triggerConfig(runn, mem, alignment, effiout);
+    printf("INFO daqlogbook_update_triggerConfig rc:%d\n", rc);
   };
   if(rc!=0) {
     sprintf(emsg, "DAQlogbook_update_triggerConfig: rc:%d\n",rc); 
@@ -711,10 +790,32 @@ if(rl < 10) {
     printf("ERROR %s", emsg);
   };
 };
+free(mem);
+printf("INFO ctpshmbase3:%p\n", ctpshmbase);
+cshmDetach(); printf("INFO shm detached.\n");
+cshmInit();   /* without this line and with daqlogbook_update_triggerConfig above, server crashes
+in P2, but not in lab. In lab, repeated cshmInit leads to:
+[trigger@avmes logs]$ grep -e ctpshmbase -e attached pydimserver.log 
+02.10.2015 14:13:28 received:INFO shared memory attached at address 0x7f1028920000
+02.10.2015 14:13:28 received:INFO ctpshmbase1:0x7f1028920000
+02.10.2015 14:13:44 received:INFO ctpshmbase2:0x7f1028920000
+02.10.2015 14:13:44 received:INFO ctpshmbase3:0x7f1028920000
+02.10.2015 14:13:44 received:INFO shared memory attached at address 0x7f102891c000
+02.10.2015 14:13:44 received:INFO ctpshmbase4:0x7f102891c000
+- seems ok (reattached at diffrent address +0x4000)
+ */
+printf("INFO ctpshmbase4: detached+attached%p\n", ctpshmbase);
+bm= cshmBM(); 
+globflags= cshmGlobFlags(); 
+printf("INFO beammode:%d GlobalFlags:0x%x\n", bm, globflags);   // todo:cs update only for 7(RAMP)..12(UNSTABLE BEAMS)
 if(ignoreDAQLOGBOOK) { 
   rc=0;
 } else {
-  rc= daqlogbook_update_cs(runn, CSString);
+  if((bm>=7) && (bm<=12)) {
+    rc= daqlogbook_update_cs(runn, CSString);
+  } else {
+    printf("INFO cs not updated ( bm<7 or bm>12)\n");
+  };
   do_partitionCtpConfigItem(pname, itemname);
   rc= daqlogbook_update_ACTConfig(runn, itemname,instname,instver);
 };
@@ -778,7 +879,7 @@ unsigned int runN;
 int ixc;
 char value[256];
 enum Ttokentype t1,t2;
-printf("INFO updateDAQDB...\n");
+printf("INFO updateDAQDB... effiout:0x%x\n", effiout);
 ixl=6; t1= nxtoken(line, value, &ixl);   // runNumber
 if(t1==tINTNUM) {
   runN= str2int(value);
@@ -921,13 +1022,14 @@ printf("DIM server:%s cmd:%s\n", servername, command); // should be 1st line
 reset_insver();
 /*cs=*/ readCS();
 rc= readAliases(); 
-cshmInit();
-readTables();   // + when ctpprxy restaretd, i.e. in time of rcfgdel 0 ALL
 if(rc==-1) {
   char emsg[200];
   strcpy(emsg,"aliases info from aliases.txt not updated correctly");
   infolog_trg(LOG_ERROR, emsg); printf("ERROR %s\n",emsg);
 };
+cshmInit();
+readTables();   // + when ctpprxy restarted, i.e. in time of rcfgdel 0 ALL
+printf("INFO ctpshmbase1:%p\n", ctpshmbase);
 ctpc_clear(); ctpc_print(CNAMESString);
 //updateCNAMES();
 rc= getINT12fromcfg(INT1String, INT2String, MAXINT12LINE);
@@ -948,8 +1050,11 @@ LTUCFGid= dis_add_cmnd(cmd,NULL, DOltucfg, 90);
 printf("INFO DIM cmd:%s id:%d\n", cmd, LTUCFGid);
 
 sprintf(cmd, "%s/COM2DAQ", servername);   // CTPRCFG/COM2DAQ
-C2Did= dis_add_cmnd(cmd,NULL, DOcom2daq, 91);
+C2Did= dis_add_cmnd(cmd,"C", DOcom2daq, 91);
 printf("INFO DIM cmd:%s id:%d\n", cmd, C2Did);
+sprintf(cmd, "%s/SETBM", servername);   // CTPRCFG/SETBM
+SETBMid= dis_add_cmnd(cmd,"C", DOsetbm, 92);
+printf("INFO DIM cmd:%s id:%d\n", cmd, SETBMid);
 /*
 sprintf(cmd, "%s/FSUPDATE", servername);   // CTPRCFG/FSUPDATE
 FSUid= dis_add_cmnd(cmd,NULL, DOfsupdate, 92);
@@ -1004,6 +1109,14 @@ while(1) {
     };
   } else if(strncmp(line,"inpupd ",7)==0) {
     update_ctpins(line);
+  } else if(strncmp(line,"indets ",7)==0) {
+    int ix, ix1, runnumb; char *efstart;
+    ix1= sscanf(&line[7], "%d ", &runnumb);
+    efstart= strstr(&line[7], "0x");   // indets runN 0xeffiout 0xindets
+    ix= sscanf(efstart, "0x%x 0x%x\n", &effiout, &indets);
+    printf("INFO ix1:%d runnumb:%d ix:%d effiout:0x%x indets:0x%x\n",
+      ix1, runnumb, ix, effiout, indets); fflush(stdout);
+    //rcupd= updeff_insver(runnumb, effiout);
   } else if(strncmp(line,"cmd ",4)==0) {
     int unsigned ix,rcsystem;
     for(ix=0; ix<strlen(line); ix++) {

@@ -153,6 +153,11 @@ class TrgLTUS:
       if ltu.fo==fo and ltu.focon==focon:
         return ltu.name
     return ""
+  def getLTUnameOfNum(self, num):
+    for ltu in self.ltus:
+      #print ltu.name, ltu.fo, ltu.focon
+      if ltu.detnum==num: return ltu.name
+    return ""
   def getLTUnameOfBusy(self, busyinput):
     """return: LTUname connected to BUSY input busyinput (1..24)
              "" if not connected
@@ -164,12 +169,12 @@ class TrgLTUS:
         return ltu.name
     return ""
   def getdetnum(self,name):
-    """return: ECS detector namber for LTU name"""
+    """return: ECS detector number for LTU name"""
     for ltu in self.ltus:
       if ltu.name==name: return ltu.detnum
     return None
   def getTTCITSW(self,name):
-    """return: ECS detector namber for LTU name"""
+    """return: ECS detector number for LTU name"""
     for ltu in self.ltus:
       if ltu.name==name: return ltu.ttcitsw
     return None
@@ -239,7 +244,7 @@ expected) in VALID.LTUS file:
     # 0               1      2      3    4         5
     if (nhb[1].find('altri')!=0) and  (nhb[1].find('alidcsvme')!=0):
       # case for TTCpartitions in various labs:
-      PrintError("Line with CPU %s in ttcparts.cfg ignored"%nhb[1])
+      #PrintError("Line with CPU %s in ttcparts.cfg ignored"%nhb[1])
       continue
     notltu=True
     for ltu in ltus:
@@ -514,6 +519,40 @@ class TrgVALIDINPUTS(Table):
       print "ERROR: %s"%err
       return None
     hx= txtproc.log2tab(lf4, lf4order)
+    return hx
+  def log2tab8(self, lf8):
+    """ lf8: logical function of first eight L0 inputs (see txtproc.log2tab)
+    The names (e.g.: 0VGA...) are used in lf8.
+    Operation:
+    - check if all used inputs are first 8 L0 inputs
+    - convert logical expression to lookuptable
+    Return: 0xabcd lookuptable
+            None if error (error message printed to stdout)
+    """
+    import txtproc
+    lf8order=['','','','','','','',''] ; err=''
+    ok,vie= txtproc.varsInExpr(lf8)
+    if ok=='OK':
+      for ixv in range(len(vie)):
+        ix= self.findixof(0, vie[ixv])
+        if ix!=None:
+          if self.ents[ix][3]=='0':
+            inpn= self.ents[ix][5] ; inpnint= int(inpn)
+            #pdb.set_trace() 
+            if (inpnint>=1) and (inpnint <= 8):
+              lf8order[inpnint-1]= vie[ixv]
+            else:
+              err="%s%s is not one of the first eight L0 CTP inputs. "%(err,vie[ixv])
+          else:
+            err="%s%s is not L0 CTP input. "%(err, vie[ixv])
+        else:
+          err="%s%s is not valid CTP input. "%(err, vie[ixv])
+    else:
+      err= vie
+    if err != '':
+      print "ERROR: %s"%err
+      return None
+    hx= txtproc.log2tab(lf8, lf8order)
     return hx
       
 class TrgL0INPUTS(Table):
@@ -939,7 +978,8 @@ class TrgRcfg:
 def main(argv):
   if len(argv) < 2:
     print """
-trigdb.py log2tab 'logical expression from L0inputs'
+trigdb.py log2tab 'logical expression from first 4 L0inputs'
+trigdb.py log2tab8 'logical expression from first 8 L0inputs'
   obsolete trigdb.py prtinps_run1     source: VALID.CTPINPUTS taken   
 trigdb.py prtinps     source: ctpinputs.cfg taken   
   obsolete trigdb.py cables      source: L0.INPUTS (L0) + VALID.CTPINPUTS (L1+L2) 
@@ -950,6 +990,18 @@ trigdb.py joininputs  L0.INPUTS+VALID.CTPINPUTS -> ctpinputs_built.cfg
     vcis= TrgVALIDINPUTS()
     hx= vcis.log2tab(argv[2])
     if hx!= None: print hx
+  elif argv[1]=='log2tab8':
+    vcis= TrgVALIDINPUTS()
+    hx= vcis.log2tab8(argv[2])
+    if hx!= None: print hx
+  elif string.find(argv[1], "0x")==0:
+    reqltus= eval(argv[1])
+    ltus= TrgLTUS()
+    ltulist=""
+    for detn in range(24):
+      if ((1<<detn) & reqltus) != 0:
+        ltulist= ltulist + " " + ltus.getLTUnameOfNum(detn)
+    print ltulist
   elif argv[1]=='prtinps_run1':
     a=TrgVALIDINPUTS("run1lm0")
     print a.getL012inputs('switch')

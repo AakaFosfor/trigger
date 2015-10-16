@@ -17,6 +17,8 @@ VERSION: 5 (both .rcfg .partition): sync downscaling
 VERSION: 6 LINDF REPL added
 25.6.2014
 VERSION: 7 >=7 from now
+6.9.2015
+VERSION: 8 new PF
 """
 from Tkinter import *
 import os,sys,glob,string,shutil,types
@@ -31,7 +33,7 @@ if hasattr(sys,'version_info'):
     warnings.filterwarnings("ignore", category=FutureWarning, append=1)
     print "warnings ignored\n\n"
 import myw, txtproc, trigdb, syncdg, preproc
-VERSION="7"
+VERSION="8"
 COLOR_PART="#006699"
 COLOR_CLUSTER="#00cccc"
 COLOR_NORMAL="#d9d9d9"
@@ -96,7 +98,7 @@ def redline(inf):                 # ignore empty lines
     cl= inf.readline()
     #print "redline:",cl[:-1]
     if cl=='\n': continue    
-    if len(cltds)>0 and cltds[0]=='#':continue
+    if len(cl)>0 and cl[0]=='#':continue   # ignore comments (fixed 30.7.2015)
     if cl[-2:]=='\\\n': 
       cltds= cltds + cl[:-2]
       continue
@@ -841,18 +843,31 @@ class TrgSHR_BCM(TrgSHR):
     if self.value==None: return None
     inx= TDLTUS.findBCMPFname(self.value, self.bcmpf)
     return self.BCMPFitems[inx][1]
+  def getName(self):
+    """
+       returns name of PF (maybe also BCM)
+       Name of PF to be used for sharing
+    """
+    if self.value==None: return None
+    inx= TDLTUS.findBCMPFname(self.value, self.bcmpf)
+    return self.BCMPFitems[inx][0]
   def isPFDefined(self,level):
-    """ "0 0 0" ->
-    PF on given level not defined (i.e. not to be used as veto in class def)
+    """
+    PF definition:
+    Name BCM IR PeriodBefore PeriodAfter NintBefore NintAfter OFFBefore OffAfter
     """
     pfd= string.split(self.getDefinition())
-    if len(pfd)!=12:
-      IntErr("isPFDefined: bad definition of PF:%s"%self.getDefinition())
-      return False
-    for ix in range(3):
-      if eval(pfd[ix+(3*level)])!=0:
-        return True
-    return False
+    print "isPFDefined: ",pfd," len=",len(pfd)," level=",level
+    if len(pfd)!=8:
+       IntErr("isPFDefined: bad definition of PF:%s"%self.getDefinition())
+       return False
+    # PF at levels according to PeriodAfter, detail calculation in c
+    PeriodAfter=int(pfd[3])
+    LML0time=15
+    L0L1time=280
+    if level==1 and PeriodAfter<LML0time: return False
+    if level==2 and PeriodAfter<L0L1time: return False
+    return True
   def prtBits(self):
     ix= TDLTUS.findBCMPFname(self.value, self.bcmpf)
     logdef= self.BCMPFitems[ix][1]
@@ -1000,7 +1015,7 @@ Predefined BC masks in VALID.BCMASKS file:
     #  self.validtds= []    # ["MB","SC",...]
     f= open(os.path.join(TRGDBDIR, "VALID.DESCRIPTORS"),"r")
     PrintError("\n-----------------------------------------------VALID.DESCRIPTORS:",self)
-    baddescriptors= 0 ; notreadydescriptors= 0
+    baddescriptors= 0 ; notreadydescriptors= 0 ; readydescriptors= 0
     for line in f.readlines():
       self.tdshelptext=self.tdshelptext+line
       if len(line) <= 3: continue
@@ -1027,14 +1042,16 @@ Predefined BC masks in VALID.BCMASKS file:
         if newtrgdes.allinputsvalid==False:
           PrintError(newtrgdes.loaderrors, self)
           notreadydescriptors= notreadydescriptors+1
+        else:
+          readydescriptors= readydescriptors+1
         self.tds.append(newtrgdes)
         self.validtds.append(string.split(stripedline)[0])    
       else:
         PrintError(newtrgdes.loaderrors, self)
         baddescriptors= baddescriptors+1
     f.close() 
-    PrintError("Bad descriptors:%d not ready:%d"%\
-      (baddescriptors,notreadydescriptors), self)
+    PrintError("Descriptors: bad:%d notready:%d ready:%d"%\
+      (baddescriptors,notreadydescriptors, readydescriptors), self)
     self.tdsbuthelptext="""
 LEFT mouse button   -> add/remove Trigger class in/from this cluster.
 MIDDLE mouse button -> delete this cluster.
@@ -1118,6 +1135,22 @@ l. The list of possible trigger descriptor names - one of them has
     #  items=self.validtds, label="Trigger descriptor:")
     xmenu= myw.MywLabel(master, label="Trigger descriptor: "+trdeactive.name)
     return xmenu
+  def checkPFSyntax(self,pf):
+    items=pf.split()
+    print len(items),items
+    if len(items) != 8:
+      error = "PF: Wrong number of items: "+ str(len(items))+' '+pf
+      return error
+    if (items[1] != "INT1") and (items[1] != "INT2") and (items[1] != "INT12"):
+      error = "PF: wrong INT: "+pf
+      return error
+    if (int(items[2])<2) or (int(items[3])<2):
+      error = "PF: PeriodBefore and PeriodAfter should be >=2 "+pf
+      return error
+    if (int(items[3])+int(items[7])) > 4208:
+      error = "PF: PeriodAfter+OffsetAfter should be < L2time=4208 "+ pf
+      return error
+    return None
   def load_PFs(self):
     PrintError("----------------------------------------------- TRIGGER.PFS:",self)
     f= open(os.path.join(TRGDBDIR, "TRIGGER.PFS"),"r")
@@ -1127,14 +1160,15 @@ l. The list of possible trigger descriptor names - one of them has
       self.pfshelptext=self.pfshelptext+line
       if line[0] == "#": continue
       if line[0] == "\n": continue
-      (bcm_name, bcm_definition) = string.split(line," ",1)
-      bcm_definition= string.strip(bcm_definition)
-      #errmsg= bm.checkSyntax()
-      errmsg=None
+      (pf_name, pf_definition) = string.split(line," ",1)
+      pf_definition= string.strip(pf_definition)
+      errmsg= self.checkPFSyntax(pf_definition)
+      #errmsg=None
       if errmsg!= None:
         PrintError(errmsg, self)
       else:
-        self.PF_DB.append([bcm_name,bcm_definition]);	
+        self.PF_DB.append([pf_name,pf_definition]);	
+        print "PF %s"%pf_name, pf_definition
     f.close()
   def load_BCMs(self):
     PrintError("----------------------------------------------- VALID.BCMASKS:",self)
@@ -1212,8 +1246,9 @@ for ix in range(PF_NUMBER):         #4 PFs, start from PFS_START=16/8
 
 def initparted():
   TDLTUS.initTDS() 
-  print "initparted",TDLTUS.BCM_DB[1],TDLTUS.BCM_DB[2]
+  print "initpartedi csname:",TDLTUS.csName, TDLTUS.BCM_DB[1],TDLTUS.BCM_DB[2]
   return
+  # seems we can cope without calling initparted from pydim
   del SHRRSRCS[4:]
   print "initparted SHRRSRCS len:", len(SHRRSRCS)
   for ix in range(BCM_NUMBER):         #4(12) BCM vetos, start from BCMASKS_START
@@ -1379,7 +1414,7 @@ class TrgClass:
       p0= self.trde.name.replace('D','C',1)   #default class name
       if p0=='CEMPTY': p0='CTRUE'
       #if cluspart!='CENT ALL MUON TPC FAST':
-      if string.find('CENT ALL ALLNOTRD MUON TPC FAST FASTNOTRD CFAST CENTNOTRD',cluspart)<0:
+      if string.find('CENT ALL ALLNOTRD MUON TPC FAST MUFAST UFAST FASTNOTRD CFAST CENTNOTRD',cluspart)<0:
         # only warning pprinted:
         print "Strange cluster name:%s"%cluspart
       self.clsnamepart=[p0, "ABCE", "NOPF", cluspart]
@@ -1716,7 +1751,7 @@ Currently, these times [in seconds] are defined for groups 1..9:
     """
     cluspart: None -trailing cluster part not given in returned name
     new (from 11.5.2012:
-    return: buit-name i.e. built from clsnamepart[]
+    return: built-name i.e. built from clsnamepart[]
     """
     if self.clsname!='': 
       return self.clsname
@@ -2176,25 +2211,44 @@ class TrgPartition:
     for cl in self.clusters:
       #print "nclusttds length:", len(cl.tds)
       cl.prt()
-  def prtInputDetectors(self):
+  def prtInputDetectors(self,hexs=None):
+    """ stdout: SPD V0 *T0   -i.e. list of inp. detectors + list of 
+                effectively filtered out detectors marked by '*'
+    hexs='yes'
+    instead of stdout, return 2 hex. numbers: 0xeffo 0xindets
+    """
     allindets={} ; detsline=""   #alloutdets={}
+    hxindets= 0 ; hxeffo= 0
     for cluster in self.clusters:
       if cluster==None:
         PrintError("cluster None")
         break
       cids= cluster.getinpdets()
-      #print "cluster:",cluster.name, cids
-      for id in cids:
-        if id=="L0FUNS": continue
-        if id=="": continue   # no input (e.g.:ctp generator)
-        if not allindets.has_key(id):
-          allindets[id]= id
-          detsline= id + " " + detsline
+      #print "prtInputDets cluster:",cluster.name, cids
+      for detid in cids:
+        if detid=="L0FUNS": continue
+        if detid=="": continue   # no input (e.g.:ctp generator)
+        if not allindets.has_key(detid):
+          allindets[detid]= detid
+          detsline= detid + " " + detsline
+          idetbit= TDLTUS.findLTU(detid).detnum
+          hxindets= hxindets | (1<<idetbit)
     if self.filteredout !="":
       detsline= string.strip(detsline) + " " + string.strip(self.filteredout)
     # no inp. detectors if using RND1 connected to inputs!
-    if self.inpgcons != None: detsline=''
-    print detsline
+    # filteredout: they were filtered out even with INRND1 option
+    if self.inpgcons != None:
+      detsline= string.strip(self.filteredout)
+      hxindets= 0
+    if hexs=="yes":
+      # instead of printing to stdout, return string:0xeffo 0xindets
+      for stardet in string.split(self.filteredout):
+        det= stardet[1:]
+        idetbit= TDLTUS.findLTU(det).detnum
+        hxeffo= hxeffo | (1<<idetbit)
+      return "0x%x 0x%x"%(hxeffo, hxindets)
+    else:
+      print detsline
   def getRR(self, minst, ix=0):   # get Required Resources
     """ 
     rc: (classes,pfs,bcms,clusters,outdets, indets)
@@ -2368,7 +2422,8 @@ class TrgPartition:
             continue
         l0inv=0
         if FPGAVERSION>=0xc0:
-          l0vetos= 0x1ffff0|clunum # 0x800000 0 (active class), DSCG: 0x7f000000
+          #l0vetos= 0x1ffff0|clunum # 0x800000 0 (active class), DSCG: 0x7f000000
+          l0vetos= 0xf1ffff0|clunum # 0x800000 0 (active class), DSCG: 0x7f000000
         else:
           if BCM_NUMBER==4:
             l0vetos=0xfff0 | clunum # 0x10000 has to be 0 (active class)
@@ -2432,20 +2487,20 @@ class TrgPartition:
                 "Undefined %s referenced by class %s, reference discarded in .pcfg file\n"%\
                 (SHRRSRCS[ix4+PFS_START].name, cls.getclsname())
               continue   
-            #print "PFdef:",SHRRSRCS[ix4+PFS_START].getDefinition()
+            print "PFdef:",SHRRSRCS[ix4+PFS_START].getDefinition()
             # check if common definition agrees (should be improved, can happen not all PFs used):
-            comdef= map(eval,string.split(SHRRSRCS[ix4+PFS_START].getDefinition())[PF_COMDEFSIX:])
-            if pf_comdef==None:
-              pf_comdef= comdef
-            else:
-              err=False
-              for i in range(3):
-                if comdef[i]!= pf_comdef[i]:
-                  errormsg= errormsg+\
-                    "PF%d common definition does not agree,not used, class:%d\n"%((ix4+1),clanum)
-                  err=True ; break
-              if err:
-                continue
+            #comdef= map(eval,string.split(SHRRSRCS[ix4+PFS_START].getDefinition())[PF_COMDEFSIX:])
+            #if pf_comdef==None:
+            #  pf_comdef= comdef
+            #else:
+            #  err=False
+            #  for i in range(3):
+            #    if comdef[i]!= pf_comdef[i]:
+            #      errormsg= errormsg+\
+            #        "PF%d common definition does not agree,not used, class:%d\n"%((ix4+1),clanum)
+            #      err=True ; break
+            #  if err:
+            #    continue
             if SHRRSRCS[ix4+PFS_START].isPFDefined(0): 
               l0vetos=l0vetos & ~r12b12
             if SHRRSRCS[ix4+PFS_START].isPFDefined(1): 
@@ -2569,7 +2624,8 @@ Logical class """+str(clanum)+", cluster:"+cluster.name+", class name:"+ cls.get
       #print "bcm%d"%i,SHRRSRCS[BCMASKS_START+i].getDefinition()
       pfdef= SHRRSRCS[PFS_START+i].getDefinition()
       if pfdef==None: continue
-      line='PF.%d %s'% (i+1, pfdef)
+      name= SHRRSRCS[PFS_START+i].getName()
+      line='PF.%d %s %s'% (i+1, name,pfdef)
       outfile.write(line+"\n")
     #
     self.sdgs.save(outfile, "SDG ")
@@ -2593,7 +2649,7 @@ Logical class """+str(clanum)+", cluster:"+cluster.name+", class name:"+ cls.get
     return ""
   def prtinputs(self, dbgfname=None):
     """ output: WORKDIR/dbgfname or 
-                returned string: "ctpin1 ctpin2 ..."   (for inpupd cmd frim pydimserver.py)
+                returned string: "ctpin1 ctpin2 ..."   (for inpupd cmd from pydimserver.py)
                 where ctpin* are used ctpinputs numbers 1..60, i.e. 1..24:l0 25..48:l1 49..60:l2
                 
     """
@@ -2948,6 +3004,7 @@ Logical class """+str(clanum)+", cluster:"+cluster.name+", class name:"+ cls.get
           line= line+' '+det.name
       line= line+'\n'
       of.write(line)
+    #-------------------------------------------------------------PF
     line='PFS:\n' ; of.write(line)   # !Reminder: do the same as for BCMASKS (atleast1classNONEbcm)
     atleast1pf=0 
     for ixpfpc in range(PF_NUMBER):
@@ -2957,7 +3014,8 @@ Logical class """+str(clanum)+", cluster:"+cluster.name+", class name:"+ cls.get
       line="PF%d %s\n"%(ixpfpc+1, pfdef)
       of.write(line)
       atleast1pf= atleast1pf+1
-    if atleast1pfnone>0:      #if atleast1pf==0:
+    if atleast1pfnone>=0:      
+      # always add NONE because of aliroot (actually add if at least one class has nopf -  to be done later) 
       line='NONE\n' ; of.write(line)
     line='BCMASKS:\n' ; of.write(line)
     line='#cs %s\n'%(TDLTUS.csName) ; of.write(line)
@@ -3154,6 +3212,9 @@ Logical class """+str(clanum)+", cluster:"+cluster.name+", class name:"+ cls.get
           #SHRRSRCS[0].used= SHRRSRCS[0].used+1 # rnd1 used
           for inn in cltdsa[1:]:
             inp= TDLTUS.findInput(inn)
+            if inp==None:
+               print 'INRND1: ignoring input: ',inn
+               continue
             inp.prt()
             if inp.swin != '0':   # calculate 2 RND1_EN_FOR_INPUTS words
               if self.inpgcons==None: self.inpgcons= [0,0]
@@ -3193,12 +3254,17 @@ Logical class """+str(clanum)+", cluster:"+cluster.name+", class name:"+ cls.get
           #print "Shared selfloaderrors:",self.loaderrors
         continue
       # Clusters section 
+      #print "Cluster section:",cltds, self.version
       if self.version!='0': # (Version>1: 3 lines per cluster):
         clusname= string.strip(cltds)      # cluster name
+        #print "Clustername:",clusname
         if clusname=='':
           PrintWarning("Empty line  in Clusters: section ignored")
           continue
           #clusname=str(len(self.clusters))   # "0, 1... ", read from file
+        if len(string.split(clusname))!=1:
+          PrintError("Bad cluster name: '%s' in Clusters: section"%clusname,self)
+          break
         cltds= redline(inf)                   # classes line
         if self.downscaling!=None:
           cltds= self.downscaling.replace_inline(cltds)
@@ -3537,7 +3603,7 @@ The window will be closed after saving current configuration.
     self.part.name= newname
     self.lsmaster.title(self.part.name)
   def loadPartition(self,partname=None):
-    print "loadPartititon:",partname
+    print "loadPartition:",partname
     if partname==None:
       ix= self.partsbut.getIndex()
       partname=self.itn[ix][0]

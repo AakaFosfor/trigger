@@ -196,9 +196,9 @@ if(dodel==1) {
   };
   // int1lookup int1def int2lookup int2def
   //int2lookupdef bug
-  int1lookup= getLM0addr(L0_INTERACT1);
-  int2lookup= getLM0addr(L0_INTERACT2);
-  int2def= getLM0addr(L0_INTERACTSEL);
+  int1lookup= (L0_INTERACT1);
+  int2lookup= (L0_INTERACT2);
+  int2def= (L0_INTERACTSEL);
   int1def= int2def & 0x1f; int2def= int2def >> 5;
   sprintf(cmd, "%s 0x%x 0x%x 0x%x 0x%x", cmd, int1lookup, int1def, int2lookup, int2def);
   strcat(cmd,"\n");
@@ -399,6 +399,7 @@ if((ixhw>=ixl0fun1) && (ixhw<=ixl0fun4) ) { // for l0f1..4 we need more than VAL
       dst2= &prbif->l0intfs[(ixhw-ixl0fun1)*L0INTFSMAX];   //in partition
       strcpy(dst2, src);  // ???
     } else {
+      // these are not l0f34 ??
       printf("ERROR allocateInhw: %d (l0f34 12-inps) not available in run2\n", ixhw); return;
     };
   } else {   
@@ -715,23 +716,40 @@ return(rcode);
 }
 /* similar logic as for masks above */
 int checkPFS(TRBIF *cumrbif,TRBIF *prbif){
-int bcmi; int rcode=0;
-//w8 bcmsused;
 if(DBGpfs) {
   prtLog(".................................checkPFS...");
 };
-for(bcmi=0; bcmi<4; bcmi++) {
-  w8 bcm;
-  bcm= prbif->PFuse[bcmi];
-  if( bcm == 0 ) continue;
-  rcode= copycheckPF(cumrbif, prbif, bcmi);
-  if(rcode !=0) {
-    char emsg[100];
-    sprintf(emsg,"PF%d already used by another partition",bcmi+1);
-    infolog_trgboth(LOG_ERROR, emsg); rcode=1; break;
-  };
-};
-return(rcode);
+for(int ipf=0; ipf<NPF; ipf++) {
+  //printf("checkPFS %i %i %s \n",ipf,prbif->PFuse[ipf],prbif->pf[ipf].name);
+  if(prbif->PFuse[ipf]==0) continue;
+  TPastFut* pf=&prbif->pf[ipf];
+  // test if new pf already exists in cumulated
+  TPastFut* cumpf=&cumrbif->pf[ipf];
+  if(cumrbif->PFuse[ipf] != 0){  // PF already used
+    if(strcmp(pf->name,cumpf->name) != 0){
+      printf("checkPFS error: PF%i conflict: %s %s \n",ipf+1,pf->name,cumpf->name);
+      return 1;
+    }
+    printf("checkPFS : PF%i found: %s %s \n",ipf+1,pf->name,cumpf->name);
+  }else{
+  // PF not in cum, add it
+    if(cumrbif->BCMASKuse[cumpf->bcmask]==0){
+      printf("checkPFS: BCmask used in PF not in config ? \n");
+      return 2;
+    }
+    copyTPastFut(cumpf,pf);
+    cumrbif->PFuse[ipf]=1;
+    // LM before at LM
+    cumpf->lmpf[ipf+4]=1;
+    // L0 before at L0
+    cumpf->l0pf[ipf]=1;
+    // LM after at L0
+    cumpf->lmpf[ipf]=1;
+    printf("checkPFS : PF%i added: %s %s \n",ipf+1,pf->name,cumpf->name);
+ }
+}
+// here add more clever check on usage of circuits ?
+return 0;
 }
 
 /*------------------------------------------------------ cumRBIF()
@@ -774,6 +792,8 @@ if(checkpairRBIF(ixintfun2,&rbifloc,part->rbif))goto ERR1; */
 if(checkpairRBIF(ixlut4142,&rbifloc,part->rbif))goto ERR1; */
 if(checkBCMASKS(&rbifloc,part->rbif))goto ERR1;
 if(checkPFS(&rbifloc,part->rbif))goto ERR1;
+//printf("cumRBIF at return \n");
+//printTRBIF(&rbifloc);
 copyTRBIF(cumrbif, &rbifloc); // cumrbif -> HW.rbif in addRBIF2HW
 return(0);
 ERR1:
@@ -945,9 +965,8 @@ if(part->nclassgroups>0) { //this partition is 'timed'
   // RBIF resources 
   if((ret=checkRBIF(part,AllPartitions))) return ret;
   // PF resources
+  // done in RBIF
   //if((ret=checkInputs(part))) return ret;
-  // PF resources
-
   return 0;
 }
 /*-----------------------------------------------------addRBIF2HW()
@@ -965,11 +984,13 @@ for(ip=0;ip<MNPART;ip++){           //loop over partitions
   if(parray[ip] == NULL) continue;
   //printf("Partition %i \n",ip);
   part=parray[ip];
-  printf("===addRBIF2HW:%s\n", part->name);
+  printf("===addRBIF2HW:%s %i \n", part->name,ip);
   printTRBIF(part->rbif);
   if(cumRBIF(part, &rbifloc)) goto ERR1;
 };
 copyTRBIF(HW.rbif, &rbifloc);
+//printf("AddRBIF2HW: at return \n");
+//printTRBIF(HW.rbif);
 return(0);
 ERR1:return(1);
 }
@@ -2064,7 +2085,7 @@ if(strcmp(&part->name[strlen(part->name)-2],"_U")!=0) {
    if(deadbusys !=0) { strcat(ltunames," CTP"); };
    sprintf(emsg, "%s cannot be sent because of dead detectors (run:%d):%s", 
      SEY, part->run_number, ltunames);
-   infolog_trgboth(LOG_FATAL, emsg);
+   infolog_trgboth(LOG_ERROR, emsg);
    // following emsg must start with 'detectorBusy' followed by
    // list of detectors separated by spaces, last detector
    // is followed by comma. Reason: errorReason is specially processed in ECS
@@ -2089,7 +2110,7 @@ if(strcmp(&part->name[strlen(part->name)-2],"_U")!=0) {
   char emsg[ERRMSGL];
   sprintf(emsg, "%cOD generation suppressed (part. name: ..._U).\n", x);
   strncpy(errorReason, emsg,ERRMSGL);
-  infolog_trgboth(LOG_FATAL, emsg);
+  infolog_trgboth(LOG_ERROR, emsg);
   ret=2;
 };
 if(x == 'E') {
@@ -2524,9 +2545,8 @@ if(tspart!=NULL) {
 RETSTOP_badsyntax:
 if(emsg[0]!='\0') printf("%s\n",emsg);
 RET:
-//npart= getNAllPartitions();  -better in ctp_InitPartition
-//if(npart==0) { prepareRunConfig(NULL,3); };  //reload parted
 if(quit==1) {
+  npart= getNAllPartitions();
   if(npart==0) {
     sprintf(emsg,"ctp_proxy stopping (no active partitions)");
     quit=10;
@@ -2548,7 +2568,7 @@ Tpartition *part;
 char msg[MAXMSG];
 errorReason[0]='\0';
 npart= getNAllPartitions();
-if(npart==0) { prepareRunConfig(NULL,3); };  //reload parted
+/*if(npart==0) { */ prepareRunConfig(NULL,3); // };  reload parted ALWAYS
 part=getPartitions(name, AllPartitions); 
 if(part==NULL) { 
   rc= ctp_InitPartition(name,mask,run_number,ACT_CONFIG, errorReason);
@@ -2635,7 +2655,7 @@ if(part!=NULL) {
 };
 infolog_SetStream(name, run_number);
 npart= getNAllPartitions();
-if(npart==0) { prepareRunConfig(NULL,3); };  //reload parted
+/*if(npart==0) {*/ prepareRunConfig(NULL,3); //};  reload parted ALWAYS
 //------------------------------------------- prepare fresh .pcfg file:
 if( partmode[0] == '\0'){strcpy(name2, name);}else{ strcpy(name2, partmode); };
 sprintf(msg,"rm -f /tmp/%s.pcfg", name2); ret=system(msg);
@@ -2690,7 +2710,7 @@ if((ret=checkResources(part))) {
    //ret=deletePartitions(part);  no need (not added yet)
    part=NULL;
    goto RET2; };
-//printTpartition("After checkResources", part);
+printTpartition("After checkResources", part);
 ret= checkmodLM(part);   /* it seems it has to be here (START_PARTITION time
   is late becasue of allocation for daqlogbook) */
 
@@ -2722,7 +2742,16 @@ if(DBGparts) {
   printTpartition("After addPartitions2HW:", part); 
   printTRBIF(HW.rbif);
 };
-
+// update pf in classes here since cumulated PF in HW needed
+// classes PF not updated in HW but will hapen later in startPartition
+printf("calling checkmodLMPF \n");
+ret= checkmodLMPF(part);   
+if(ret!=0) {
+  ret=deletePartitions(part);  
+  rc=5; 
+  part=NULL;
+  goto RET2; 
+}
 sprintf(msg,"timestamp:partition inHW: %s %d", name, run_number); prtLog(msg);
 //we already know HW configuration (allocation of physics resources):
 rc= getDAQClusterInfo(part, &daqi);
@@ -2757,7 +2786,7 @@ Return : 0 ok
          5 CTP readout enabled, but DDL link not ready
 */
 int ctp_StartPartition(char *name, char *errorReason) {
-int ret,rc=0, clgroup; w32 intddlemu, orbitn;
+int rc=0, clgroup; w32 intddlemu, orbitn;
 Tpartition *part, *tspart;
 char tsname[MAXNAMELENGTH]="";
 char emsg[ERRMSGL];

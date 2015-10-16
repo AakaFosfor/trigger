@@ -40,15 +40,18 @@ def signal_handler(signal, stack):
 
 def rmzero(strg):
   rcstr=""
-  for ix in range(len(strg)):
-    if strg[ix]=='\0': break
-    rcstr= rcstr+strg[ix]
-  #if strg[-1]=='\0':
-  #  rcstr= strg[:-1]
-  #  #print "rmzero:%s:%s:"%(strg,rcstr)
-  #else:
-  #  #print 'rmzero:%s'%strg
-  #  rcstr= strg
+  #old version (till sep1 2015):
+  #for ix in range(len(strg)):
+  #  if strg[ix]=='\0': break
+  #  rcstr= rcstr+strg[ix]
+  # new version (ok in pydim/fsclient.py)
+  if strg[0]=='\0': return ""
+  eos= strg.find('\x00')
+  if eos >=0:
+    rcstr= strg[:eos]
+  else:
+    rcstr= strg
+  #
   return rcstr
 class web:
   def __init__(self):
@@ -222,7 +225,7 @@ def callback_bmold(bm):
 def callback_fsn(fnum_name):
   fsn= rmzero(fnum_name)   # number or filling sheme name
   #if fsn!="" :mylog.logm("FSN:%s:"%fsn)
-  print "callback_fsn: '%s' (type:%s)" % (fsn, type(fnum_name))
+  #print "callback_fsn: '%s' (type:%s)" % (fsn, type(fnum_name))
 def callback_bm(ecsbm):
   #print "callback_bm: '%s' (%s)" % (p2, type(p2))
   #WEB.miclock= rmzero(now) ; WEB.save()
@@ -243,10 +246,13 @@ def callback_bm(ecsbm):
     return
   prev_bmname= WEB.lastbmname
   WEB.lastbmname= bmname
+  arg= ("%d %s"%(bm, bmname),)
+  res= pydim.dic_cmnd_service("CTPRCFG/SETBM", arg, "C")
+  mylog.logm("callback_bm:" + arg[0] + " " + str(res))
   ## 
   #mylog.logm("callback_bm: "+bmname)
   #if (prev_bmname=="RAMP") or (bmname=="FLAT TOP"):
-  if bmname=="PREPARE RAMP":
+  if (bmname=="PREPARE RAMP") or (bmname=="RAMP"):
     sys.path.append(os.path.join(os.environ['VMECFDIR'],"filling"))
     import getfsdip
     reload(getfsdip)

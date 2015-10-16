@@ -28,6 +28,8 @@ extern "C" {
 #include "DAQlogbook.h"
 #endif
 #endif
+#define CTPLTUECSN 17
+
 /*
 rc: 0 -ok
 1     -not opened not compiled with DAQLOGBOOK  (lab)
@@ -214,10 +216,16 @@ wix= bc/32; bix= bc-32*wix;
 uint32[wix]= uint32[wix] | (1<<bix);
 }
 /*----------------------------------------------------------------*/
-int daqlogbook_update_triggerConfig(int runn, char *mem, char *alignment) {
+int daqlogbook_update_triggerConfig(int runn, char *mem, char *alignment, unsigned int inputDetectorMask) {
 int rc;
 #ifdef DAQLOGBOOK
 rc= DAQlogbook_update_triggerConfig(runn, mem, alignment);
+//following call can appear ONLY after previous one!
+if(rc==0) {
+  rc= DAQlogbook_update_triggerFilteredInputs(runn, inputDetectorMask);
+} else {
+  printf("ERROR daqlogbook_update_triggerConfig error:%d",rc);
+};
 #else
 printf("INFO DAQlogbook_update_triggerConfig(%d,...) not called", runn);
 rc=0;
@@ -229,7 +237,6 @@ return(rc);
 */
 int daqlogbook_update_cs(unsigned int runn, char *cs_string) {
 int rc;
-#ifdef DAQLOGBOOK
 int ix=0,slen;
 unsigned long ACBEI[5]; // # of bits sets
 unsigned long ACBEItr[5]; // # of words for DB (do not count 0s at the end)
@@ -279,9 +286,14 @@ if(slen > 0) {
       if(ignored[rc]!=0) ACBEItr[4]= rc;
     };
     for(rc=0; rc<5; rc++) { ACBEItr[rc]= (ACBEItr[rc]+1)*4; }; // length in bytes
+#ifdef DAQLOGBOOK
     rc= DAQlogbook_insert_triggerCollisionSchedule(runn, csName, 
       beamA,ACBEItr[0], beamC,ACBEItr[1], colliding,ACBEItr[2], 
       empty,ACBEItr[3], ignored,ACBEItr[4]);
+#else
+    printf("INFO DAQlogbook_insert_triggerCollisionSchedule(%d,...) not called", runn);
+    rc=0;
+#endif
     /* above OK */
     // printf("INFO daqlogbook_update_cs skipped\n");   //INVER
     printf("INFO number of bits ACBEI:%ld %ld %ld %ld %ld\n",
@@ -298,10 +310,6 @@ if(rc!=0) {
   printf("INFO DAQlogbook_insert_triggerCollisionSchedule(%d,%s,...) rc:%d",
     runn,csName, rc);
 };
-#else
-printf("INFO DAQlogbook_insert_triggerCollisionSchedule(%d,...) not called", runn);
-rc=0;
-#endif
 return(rc);
 }
 /*
@@ -325,16 +333,19 @@ return(rc);
 int daqlogbook_update_clusters(unsigned int runn, char *pname,
   TDAQInfo *daqi, 
   unsigned int ignoredaqlog) {    // on vme available in shm
+  //unsigned int effiout) {         // inp. dets effectively filtered out 
 int iclu,rc;
 printf("INFO daqlogbook_update_clusters: pname:%s runn:%d\n", pname, runn);
 for(iclu=0;iclu<NCLUST;iclu++) {
   if(daqi->masks[iclu]==0) continue;
   if(daqi->daqonoff==0) { // ctp readout active, set TRIGGER bit17 
-    daqi->masks[iclu]= daqi->masks[iclu] | (1<<17);
+    daqi->masks[iclu]= daqi->masks[iclu] | (1<<CTPLTUECSN);
   };
+  //printf("INFO daqlogbook_update_clusters: cluster:%d det/inp/class0-63/class64 mask:0x:%x %x %llx %llx effiout:0x%x\n", 
   printf("INFO daqlogbook_update_clusters: cluster:%d det/inp/class0-63/class64 mask:0x:%x %x %llx %llx\n", 
-    iclu+1, daqi->masks[iclu], daqi->inpmasks[iclu], daqi->classmasks00_063[iclu],
-    daqi->classmasks64_100[iclu]);
+    iclu+1, daqi->masks[iclu], 
+    daqi->inpmasks[iclu], daqi->classmasks00_063[iclu],
+    daqi->classmasks64_100[iclu]); //, effiout);
 #ifdef DAQLOGBOOK
   if(ignoredaqlog!=0) { rc=0;
     printf("INFO DAQlogbook_update_cluster(%d,...) not called(ignore daq)\n", runn);
@@ -344,6 +355,8 @@ for(iclu=0;iclu<NCLUST;iclu++) {
     classmask[1]=daqi->classmasks64_100[iclu];
     rc=DAQlogbook_update_cluster(runn, iclu+1, daqi->masks[iclu], 
       pname, daqi->inpmasks[iclu], classmask);
+      //pname, daqi->inpmasks[iclu], classmask, effiout);
+      // not used here -updated only once for whole partition in DAQlogbook_update_triggerFilteredInputs
     if(rc!=0) {
       printf("ERROR DAQlogbook_update_cluster failed. rc:%d", rc);
       break;
@@ -356,6 +369,18 @@ rc=0;
 };
 return(rc);
 }
+/* not needed -called directly in uupdate_triggerConfig
+int daqlogbook_update_triggerFilteredInputs(unsigned int runn, unsigned int inputDetectorMask) {
+int iclu,rc;
+#ifdef DAQLOGBOOK
+// can be called after DAQlogbook_update_triggerConfig() !
+rc= DAQlogbook_update_triggerFilteredInputs(runn, inputDetectorMask) {
+#else
+printf("INFO DAQlogbook_update_daqlogbook_update_triggerFilteredInputs(%d,...) not called\n", runn);
+rc=0;
+#endif
+return(rc);
+}*/
 void printTDAQInfo(TDAQInfo *tdaq)
 {
  printf("TDAQInfo: daqoonoff= %i \n",tdaq->daqonoff);
