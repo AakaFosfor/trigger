@@ -1,31 +1,31 @@
-/*BOARD lli 0x001000 0x2000 A24
+/*BOARD lli 0x000000 0x3000 A
 */
 /*REGSTART32 */
 
 // LLI sender, base address: 0x001000
-#define SERIAL_NUMBER     0x001000
-#define STATUS            0x001004
-#define CONTROL           0x001010
+#define S_SERIAL_NUMBER     0x001000
+#define S_STATUS            0x001004
+#define S_CONTROL           0x001010
 // LLI receiver, base address: 0x002000
-#define SERIAL_NUMBER     0x002000
-#define STATUS            0x002004
-#define DATA0             0x002008
-#define DATA1             0x00200C
-#define DATA2             0x002010
-#define DATA3             0x002014
-#define DATA4             0x002018
-#define DATA5             0x00201C
-#define DATA6             0x002020
-#define DATA7             0x002024
-#define DATA8             0x002028
-#define DATA9             0x00202C
-#define CLK_PATTERN       0x002030
-#define DW_SAVE_DATA      0x002034
-#define DW_CHECKER_RESET  0x002038
-#define WORD_ERROR_COUNT  0x00203C
-#define WORD_ERROR_RATE   0x002040
-#define BIT_ERROR_COUNT   0x002044
-#define BIT_ERROR_RATE    0x002048
+#define R_SERIAL_NUMBER     0x002000
+#define R_STATUS            0x002004
+#define R_DATA0             0x002008
+#define R_DATA1             0x00200C
+#define R_DATA2             0x002010
+#define R_DATA3             0x002014
+#define R_DATA4             0x002018
+#define R_DATA5             0x00201C
+#define R_DATA6             0x002020
+#define R_DATA7             0x002024
+#define R_DATA8             0x002028
+#define R_DATA9             0x00202C
+#define R_CLK_PATTERN       0x002030
+#define R_DW_SAVE_DATA      0x002034
+#define R_DW_CHECKER_RESET  0x002038
+#define R_WORD_ERROR_COUNT  0x00203C
+#define R_WORD_ERROR_RATE   0x002040
+#define R_BIT_ERROR_COUNT   0x002044
+#define R_BIT_ERROR_RATE    0x002048
 
 /*REGEND */
 
@@ -39,6 +39,14 @@ extern char BoardName[];
 extern char BoardBaseAddress[];
 extern char BoardSpaceLength[];
 extern char BoardSpaceAddmod[];
+
+/*FGROUP TOP GUI SenderStatus
+Show status of the sender board
+*/
+
+/*FGROUP TOP GUI ReceiverStatus
+Show status of the receiver board
+*/
 
 /* FGROUP
 int example(int n, char *string, char c)
@@ -60,6 +68,23 @@ float fexa(int ifpn) {
 	printf("fexa.ifpn:%d returning float (not supported!)...\n", ifpn);
 	rcf = ifpn;
 	return rcf;
+}
+
+/*FGROUP
+save actual received data to shaddow register and print its status
+*/
+void printData() {
+	vmew32(R_DW_SAVE_DATA, 1);
+	printf("receiver data: 0x%08x", vmer32(R_DATA9));
+	printf("%08x", vmer32(R_DATA8));
+	printf("%08x", vmer32(R_DATA7));
+	printf("%08x", vmer32(R_DATA6));
+	printf("%08x", vmer32(R_DATA5));
+	printf("%08x", vmer32(R_DATA4));
+	printf("%08x", vmer32(R_DATA3));
+	printf("%08x", vmer32(R_DATA2));
+	printf("%08x", vmer32(R_DATA1));
+	printf("%08x\n", vmer32(R_DATA0));
 }
 
 /*FGROUP
