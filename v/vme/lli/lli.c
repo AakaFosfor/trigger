@@ -26,6 +26,9 @@
 #define R_WORD_ERROR_RATE   0x002040
 #define R_BIT_ERROR_COUNT   0x002044
 #define R_BIT_ERROR_RATE    0x002048
+#define R_DELAY             0x00204C
+#define R_DW_DELAY_LOAD     0x002050
+#define R_DW_DELAY_RESET    0x002054
 
 /*REGEND */
 
@@ -33,12 +36,18 @@ extern int quit;
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h>   //usleep
+#include <sys/param.h>
+#include <math.h>
 #include "vmewrap.h"
 #include "vmeblib.h"
 extern char BoardName[];
 extern char BoardBaseAddress[];
 extern char BoardSpaceLength[];
 extern char BoardSpaceAddmod[];
+
+#define R_STATUS_LENGTH (5)
+#define BITS_IN_WORD (308)
+#define BER_CL (0.95)
 
 /*FGROUP TOP GUI SenderStatus
 Show status of the sender board
@@ -71,11 +80,11 @@ float fexa(int ifpn) {
 }
 
 /*FGROUP
-save actual received data to shaddow register and print its status
+save actual received data to shaddow register and print them (hexa)
 */
 void printData() {
 	vmew32(R_DW_SAVE_DATA, 1);
-	printf("receiver data: 0x%08x", vmer32(R_DATA9));
+	printf("receiver data:\n0x%05x", vmer32(R_DATA9));
 	printf("%08x", vmer32(R_DATA8));
 	printf("%08x", vmer32(R_DATA7));
 	printf("%08x", vmer32(R_DATA6));
@@ -85,6 +94,239 @@ void printData() {
 	printf("%08x", vmer32(R_DATA2));
 	printf("%08x", vmer32(R_DATA1));
 	printf("%08x\n", vmer32(R_DATA0));
+}
+
+void printBinary(int bit) {
+	if (bit & 1) {
+		printf("1");
+	} else {
+		printf("0");
+	}
+}
+
+void printBinaryVector(w32 high, w32 middle, w32 low, int offset, int length) {
+	int i;
+	// int x = 0;
+	int highLeft = MIN(MAX(offset+length-1-64, 0), 31);
+	int highRight = MIN(MAX(offset-64, 0), 31);
+	int middleLeft = MIN(MAX(offset+length-1-32, 0), 31);
+	int middleRight = MIN(MAX(offset-32, 0), 31);
+	int lowLeft = MIN(offset+length-1, 31);
+	int lowRight = MIN(offset, 31);
+	
+	if (highLeft != highRight) {
+		for (i = highLeft; i >= highRight; i--) {
+			printBinary((high >> i) & 1);
+			// x++;
+		}
+	}
+	if (middleLeft != middleRight) {
+		for (i = middleLeft; i >= middleRight; i--) {
+			printBinary((middle >> i) & 1);
+			// x++;
+		}
+	}
+	if (lowLeft != lowRight) {
+		for (i = lowLeft; i >= lowRight; i--) {
+			printBinary((low >> i) & 1);
+			// x++;
+		}
+	}
+	// printf("(printed %d)", x);
+}
+
+/*FGROUP
+save actual received data to shaddow register and print them (binary)
+*/
+void printDataBinary() {
+	w32 high, middle, low;
+	vmew32(R_DW_SAVE_DATA, 1);
+	printf("receiver data:\n");
+
+	high = vmer32(R_DATA9); // 20 bits
+	middle = vmer32(R_DATA8);
+	low = vmer32(R_DATA7);
+	printf("0b");
+	printBinaryVector(high, middle, low, 40, 44);
+	printf("\n");
+
+	high = middle;
+	middle = low;
+	low = vmer32(R_DATA6);
+	printf("0b");
+	printBinaryVector(high, middle, low, 28, 44);
+	printf("\n");
+
+	high = middle;
+	middle = low;
+	low = vmer32(R_DATA5);
+	printf("0b");
+	printBinaryVector(high, middle, low, 16, 44);
+	printf("\n");
+
+	high = middle;
+	middle = low;
+	low = vmer32(R_DATA4);
+	printf("0b");
+	printBinaryVector(high, middle, low, 4, 44);
+	printf("\n");
+
+	high = low;
+	middle = vmer32(R_DATA3);
+	low = vmer32(R_DATA2);
+	printf("0b");
+	printBinaryVector(high, middle, low, 24, 44);
+	printf("\n");
+
+	high = middle;
+	middle = low;
+	low = vmer32(R_DATA1);
+	printf("0b");
+	printBinaryVector(high, middle, low, 12, 44);
+	printf("\n");
+
+	high = middle;
+	middle = low;
+	low = vmer32(R_DATA0);
+	printf("0b");
+	printBinaryVector(high, middle, low, 0, 44);
+	printf("\n");
+
+}
+
+/*FGROUP
+read receiver status 10000 times and print % of individual bits in 1
+*/
+void testStatus() {
+	w32 status;
+	int counts[R_STATUS_LENGTH];
+	int i, j;
+	
+	for (i = 0; i < R_STATUS_LENGTH; i++) {
+		counts[i] = 0;
+	}
+	
+	printf("Reading status 10000 times...\n");
+	for (i = 0; i < 10000; i++) {
+		status = vmer32(R_STATUS);
+		for (j = 0; j < R_STATUS_LENGTH; j++) {
+			if ((status>>j) & 1) {
+				counts[j]++;
+			}
+		}
+	}
+	
+	for (i = 0; i < R_STATUS_LENGTH; i++) {
+		printf("Status[%d] in log.1 in %7.2f %% cases.\n", i, 100*(counts[i]/10000.0));
+	}
+}
+
+// return number of different bits
+int compareW32(w32 a, w32 b) {
+	int i, result = 0;
+	
+	a ^= b;
+	for (i = 0; i < 32; i++) {
+		if ((a>>i) & 1) {
+			result++;
+		}
+	}
+	return result;
+}
+
+/*FGROUP
+Sets sending mode to 8 (MODE_FRAME_TOGGLE) and capture 'count' words, compares
+them to known pattern and print average BER. Then sets sending mode back.
+*/
+void testBitErrorRate(int count) {
+	int i, errors, bits;
+	w32 oldControl;
+	float ber;
+	
+	// check input to prevent overflow of errors
+	if (count > (INT_MAX / BITS_IN_WORD)) {
+		printf("Count is too large! Upper limit is %d.\n", INT_MAX / BITS_IN_WORD);
+		return;
+	}
+
+	// backup sender mode and set it to MODE_FRAME_TOGGLE
+	oldControl = vmer32(S_CONTROL);
+	vmew32(S_CONTROL, 8);
+	
+	errors = 0;
+	// check 1000 words
+	printf("Reading received data %d times...\n", count);
+	for (i = 0; i < count; i++) {
+		// save received data to shaddow register
+		vmew32(R_DW_SAVE_DATA, 1);
+		// count errors
+		errors += compareW32(vmer32(R_DATA0), 0x8);
+		errors += compareW32(vmer32(R_DATA1), 0xfffff000);
+		errors += compareW32(vmer32(R_DATA2), 0xffffff);
+		errors += compareW32(vmer32(R_DATA3), 0x0);
+		errors += compareW32(vmer32(R_DATA4), 0xfffffff0);
+		errors += compareW32(vmer32(R_DATA5), 0xffff);
+		errors += compareW32(vmer32(R_DATA6), 0xf0000000);
+		errors += compareW32(vmer32(R_DATA7), 0xffffffff);
+		errors += compareW32(vmer32(R_DATA8), 0xff);
+		errors += compareW32(vmer32(R_DATA9), 0x0);
+		// printf("0: 0x%x\n", vmer32(R_DATA0));
+		// printf("1: 0x%x\n", vmer32(R_DATA1));
+		// printf("2: 0x%x\n", vmer32(R_DATA2));
+		// printf("3: 0x%x\n", vmer32(R_DATA3));
+		// printf("4: 0x%x\n", vmer32(R_DATA4));
+		// printf("5: 0x%x\n", vmer32(R_DATA5));
+		// printf("6: 0x%x\n", vmer32(R_DATA6));
+		// printf("7: 0x%x\n", vmer32(R_DATA7));
+		// printf("8: 0x%x\n", vmer32(R_DATA8));
+		// printf("9: 0x%x\n", vmer32(R_DATA9));
+		// break;
+	}
+	// calculate and print results
+	bits = count * BITS_IN_WORD;
+	printf("Found %d errors in %d bits read.\n", errors, bits);
+	if (errors == 0) {
+		// calculate estimated BER for BER_CL
+		// https://www.jitterlabs.com/support/calculators/ber-confidence-level-calculator/
+		// VALID ONLY IF ERRORS == 0 !!!
+		ber = -log(1.0l-BER_CL)/bits;
+	} else {
+		ber = errors / ((float)bits);
+	}
+	printf("BER %c %.2e\n", (errors == 0) ? '~' : '=', ber);
+	if (errors == 0) {
+		printf("  (at condidence level %.2f %%)\n", BER_CL);
+	}
+	
+	// restore original sender mode
+	vmew32(S_CONTROL, oldControl);	
+}
+
+/*FGROUP
+Scans delays from 0 to 31 and for every delay counts BER. 'count' is passed
+to function testBitErrorRate(int count).
+*/
+void scanDelays(int count) {
+	int i;
+	w32 oldDelay, oldDelayLoaded;
+	
+	// backup delay
+	oldDelay = vmer32(R_DELAY);
+	oldDelayLoaded = vmer32(R_DW_DELAY_LOAD);
+	
+	// scan delays
+	printf("Scanning delays...\n");
+	for (i = 0; i < 32; i++) {
+		printf("delay = %d:\n", i);
+		vmew32(R_DELAY, i);
+		vmew32(R_DW_DELAY_LOAD, 1);
+		testBitErrorRate(count);
+	}
+
+	// restore delay
+	vmew32(R_DELAY, oldDelayLoaded);
+	vmew32(R_DW_DELAY_LOAD, 1);
+	vmew32(R_DELAY, oldDelay);
 }
 
 /*FGROUP
