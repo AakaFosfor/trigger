@@ -2,33 +2,42 @@
 */
 /*REGSTART32 */
 
-// LLI sender, base address: 0x001000
-#define S_SERIAL_NUMBER     0x001000
-#define S_STATUS            0x001004
-#define S_CONTROL           0x001010
-// LLI receiver, base address: 0x002000
-#define R_SERIAL_NUMBER     0x002000
-#define R_STATUS            0x002004
-#define R_DATA0             0x002008
-#define R_DATA1             0x00200C
-#define R_DATA2             0x002010
-#define R_DATA3             0x002014
-#define R_DATA4             0x002018
-#define R_DATA5             0x00201C
-#define R_DATA6             0x002020
-#define R_DATA7             0x002024
-#define R_DATA8             0x002028
-#define R_DATA9             0x00202C
-#define R_CLK_PATTERN       0x002030
-#define R_DW_SAVE_DATA      0x002034
-#define R_DW_CHECKER_RESET  0x002038
-#define R_WORD_ERROR_COUNT  0x00203C
-#define R_WORD_ERROR_RATE   0x002040
-#define R_BIT_ERROR_COUNT   0x002044
-#define R_BIT_ERROR_RATE    0x002048
-#define R_DELAY             0x00204C
-#define R_DW_DELAY_LOAD     0x002050
-#define R_DW_DELAY_RESET    0x002054
+// LLI sender, base address:        0x001000
+#define S_SERIAL_NUMBER             0x001000
+#define S_STATUS                    0x001004
+#define S_CONTROL                   0x001010
+// LLI receiver, base address:      0x002000
+#define R_SERIAL_NUMBER             0x002000
+#define R_STATUS                    0x002004
+#define R_DATA0                     0x002008
+#define R_DATA1                     0x00200C
+#define R_DATA2                     0x002010
+#define R_DATA3                     0x002014
+#define R_DATA4                     0x002018
+#define R_DATA5                     0x00201C
+#define R_DATA6                     0x002020
+#define R_DATA7                     0x002024
+#define R_DATA8                     0x002028
+#define R_DATA9                     0x00202C
+#define R_CLK_PATTERN               0x002030
+#define R_DW_SAVE_DATA              0x002034
+#define R_DW_CHECKER_RESET          0x002038
+#define R_WORD_ERROR_COUNT          0x00203C
+#define R_WORD_ERROR_RATE           0x002040
+#define R_BIT_ERROR_COUNT           0x002044
+#define R_BIT_ERROR_RATE            0x002048
+#define R_DW_DELAY_RESET            0x00204C
+#define R_DW_DELAY_VALUE_RESET      0x002050
+#define R_DW_DELAY_VALUE_INC        0x002054
+#define R_DW_DELAY_VALUE_DEC        0x002058
+#define R_DELAY_VALUE_CLOCK         0x00205C
+#define R_DELAY_VALUE_DATA0         0x002060
+#define R_DELAY_VALUE_DATA1         0x002064
+#define R_DELAY_VALUE_DATA2         0x002068
+#define R_DW_DELAY_VALUE_PLL_INC    0x00206C
+#define R_DW_DELAY_VALUE_PLL_DEC    0x002070
+#define R_DELAY_VALUE_PLL           0x002074
+
 
 /*REGEND */
 
@@ -48,6 +57,8 @@ extern char BoardSpaceAddmod[];
 #define R_STATUS_LENGTH (5)
 #define BITS_IN_WORD (308)
 #define BER_CL (0.95)
+// dummy value for use in dummy write commands
+#define DUMMY_VALUE (1)
 
 /*FGROUP TOP GUI SenderStatus
 Show status of the sender board
@@ -80,10 +91,28 @@ float fexa(int ifpn) {
 }
 
 /*FGROUP
+save actual received data to shaddow register and print them (hexa, in raw format)
+*/
+void printDataRaw() {
+	vmew32(R_DW_SAVE_DATA, DUMMY_VALUE);
+	printf("receiver data:\n");
+	printf("R_DATA0: 0x%x\n", vmer32(R_DATA0));
+	printf("R_DATA1: 0x%x\n", vmer32(R_DATA1));
+	printf("R_DATA2: 0x%x\n", vmer32(R_DATA2));
+	printf("R_DATA3: 0x%x\n", vmer32(R_DATA3));
+	printf("R_DATA4: 0x%x\n", vmer32(R_DATA4));
+	printf("R_DATA5: 0x%x\n", vmer32(R_DATA5));
+	printf("R_DATA6: 0x%x\n", vmer32(R_DATA6));
+	printf("R_DATA7: 0x%x\n", vmer32(R_DATA7));
+	printf("R_DATA8: 0x%x\n", vmer32(R_DATA8));
+	printf("R_DATA9: 0x%x\n", vmer32(R_DATA9));
+}
+
+/*FGROUP
 save actual received data to shaddow register and print them (hexa)
 */
 void printData() {
-	vmew32(R_DW_SAVE_DATA, 1);
+	vmew32(R_DW_SAVE_DATA, DUMMY_VALUE);
 	printf("receiver data:\n0x%05x", vmer32(R_DATA9));
 	printf("%08x", vmer32(R_DATA8));
 	printf("%08x", vmer32(R_DATA7));
@@ -140,7 +169,7 @@ save actual received data to shaddow register and print them (binary)
 */
 void printDataBinary() {
 	w32 high, middle, low;
-	vmew32(R_DW_SAVE_DATA, 1);
+	vmew32(R_DW_SAVE_DATA, DUMMY_VALUE);
 	printf("receiver data:\n");
 
 	high = vmer32(R_DATA9); // 20 bits
@@ -234,15 +263,10 @@ int compareW32(w32 a, w32 b) {
 	return result;
 }
 
-/*FGROUP
-Sets sending mode to 8 (MODE_FRAME_TOGGLE) and capture 'count' words, compares
-them to known pattern and print average BER. Then sets sending mode back.
-*/
-void testBitErrorRate(int count) {
-	int i, errors, bits;
+void getBitErrorRate(int count, int *bits, int *errors, float *ber) {
+	int i;
 	w32 oldControl;
-	float ber;
-	
+
 	// check input to prevent overflow of errors
 	if (count > (INT_MAX / BITS_IN_WORD)) {
 		printf("Count is too large! Upper limit is %d.\n", INT_MAX / BITS_IN_WORD);
@@ -253,80 +277,92 @@ void testBitErrorRate(int count) {
 	oldControl = vmer32(S_CONTROL);
 	vmew32(S_CONTROL, 8);
 	
-	errors = 0;
-	// check 1000 words
-	printf("Reading received data %d times...\n", count);
+	*errors = 0;
+	// check 'count' words
 	for (i = 0; i < count; i++) {
 		// save received data to shaddow register
-		vmew32(R_DW_SAVE_DATA, 1);
+		vmew32(R_DW_SAVE_DATA, DUMMY_VALUE);
 		// count errors
-		errors += compareW32(vmer32(R_DATA0), 0x8);
-		errors += compareW32(vmer32(R_DATA1), 0xfffff000);
-		errors += compareW32(vmer32(R_DATA2), 0xffffff);
-		errors += compareW32(vmer32(R_DATA3), 0x0);
-		errors += compareW32(vmer32(R_DATA4), 0xfffffff0);
-		errors += compareW32(vmer32(R_DATA5), 0xffff);
-		errors += compareW32(vmer32(R_DATA6), 0xf0000000);
-		errors += compareW32(vmer32(R_DATA7), 0xffffffff);
-		errors += compareW32(vmer32(R_DATA8), 0xff);
-		errors += compareW32(vmer32(R_DATA9), 0x0);
-		// printf("0: 0x%x\n", vmer32(R_DATA0));
-		// printf("1: 0x%x\n", vmer32(R_DATA1));
-		// printf("2: 0x%x\n", vmer32(R_DATA2));
-		// printf("3: 0x%x\n", vmer32(R_DATA3));
-		// printf("4: 0x%x\n", vmer32(R_DATA4));
-		// printf("5: 0x%x\n", vmer32(R_DATA5));
-		// printf("6: 0x%x\n", vmer32(R_DATA6));
-		// printf("7: 0x%x\n", vmer32(R_DATA7));
-		// printf("8: 0x%x\n", vmer32(R_DATA8));
-		// printf("9: 0x%x\n", vmer32(R_DATA9));
-		// break;
+		*errors += compareW32(vmer32(R_DATA0), 0x00000000);
+		*errors += compareW32(vmer32(R_DATA1), 0xfffff000);
+		*errors += compareW32(vmer32(R_DATA2), 0x00ffffff);
+		*errors += compareW32(vmer32(R_DATA3), 0x00000000);
+		*errors += compareW32(vmer32(R_DATA4), 0xfffffff0);
+		*errors += compareW32(vmer32(R_DATA5), 0x0000ffff);
+		*errors += compareW32(vmer32(R_DATA6), 0xf0000000);
+		*errors += compareW32(vmer32(R_DATA7), 0xffffffff);
+		*errors += compareW32(vmer32(R_DATA8), 0x000000ff);
+		*errors += compareW32(vmer32(R_DATA9),    0x00000);
 	}
+	// restore original sender mode
+	vmew32(S_CONTROL, oldControl);	
+
 	// calculate and print results
-	bits = count * BITS_IN_WORD;
-	printf("Found %d errors in %d bits read.\n", errors, bits);
-	if (errors == 0) {
+	*bits = count * BITS_IN_WORD;
+	if (*errors == 0) {
 		// calculate estimated BER for BER_CL
 		// https://www.jitterlabs.com/support/calculators/ber-confidence-level-calculator/
 		// VALID ONLY IF ERRORS == 0 !!!
-		ber = -log(1.0l-BER_CL)/bits;
+		*ber = -log(1.0l-BER_CL)/(*bits);
 	} else {
-		ber = errors / ((float)bits);
+		*ber = *errors / ((float)(*bits));
 	}
+}
+
+/*FGROUP
+Sets sending mode to 8 (MODE_FRAME_TOGGLE) and capture 'count' words, compares
+them to known pattern and print average BER. Then sets sending mode back.
+*/
+void printBitErrorRate(int count) {
+	int bits, errors;
+	float ber;
+	
+	printf("Reading received data %d times...\n", count);
+
+	getBitErrorRate(count, &bits, &errors, &ber);
+
+	printf("Found %d errors in %d bits read.\n", errors, bits);
 	printf("BER %c %.2e\n", (errors == 0) ? '~' : '=', ber);
 	if (errors == 0) {
 		printf("  (at condidence level %.2f %%)\n", BER_CL);
 	}
-	
-	// restore original sender mode
-	vmew32(S_CONTROL, oldControl);	
 }
 
 /*FGROUP
-Scans delays from 0 to 31 and for every delay counts BER. 'count' is passed
-to function testBitErrorRate(int count).
+Scans all delays in range 0 to 31 and for every delay counts BER
+from 'count' words.
 */
 void scanDelays(int count) {
 	int i;
-	w32 oldDelay, oldDelayLoaded;
+	w32 delay, oldDelay;
+	int bits, errors;
+	float ber;
 	
 	// backup delay
-	oldDelay = vmer32(R_DELAY);
-	oldDelayLoaded = vmer32(R_DW_DELAY_LOAD);
+	oldDelay = vmer32(R_DELAY_VALUE_CLOCK);
 	
 	// scan delays
 	printf("Scanning delays...\n");
 	for (i = 0; i < 32; i++) {
-		printf("delay = %d:\n", i);
-		vmew32(R_DELAY, i);
-		vmew32(R_DW_DELAY_LOAD, 1);
-		testBitErrorRate(count);
+		delay = vmer32(R_DELAY_VALUE_CLOCK);
+		printf("delay = %d:\n", delay);
+		getBitErrorRate(count, &bits, &errors, &ber);
+		printf("BER %c %.2e\n", (errors == 0) ? '~' : '=', ber);
+		vmew32(R_DW_DELAY_VALUE_INC, DUMMY_VALUE);
 	}
 
 	// restore delay
-	vmew32(R_DELAY, oldDelayLoaded);
-	vmew32(R_DW_DELAY_LOAD, 1);
-	vmew32(R_DELAY, oldDelay);
+	i = 0;
+	delay = vmer32(R_DELAY_VALUE_CLOCK);
+	while ((delay != oldDelay) && (i < 32)) {
+		vmew32(R_DW_DELAY_VALUE_INC, DUMMY_VALUE);
+		delay = vmer32(R_DELAY_VALUE_CLOCK);
+		i++;
+	}
+	
+	if (delay != oldDelay) {
+		printf("ERROR: unable to sync back to delay %d, actual delay is %d!\n", oldDelay, delay);
+	}
 }
 
 /*FGROUP
