@@ -173,7 +173,7 @@ int checkInputs(int board,FILE *f){
 }
 //---------------------------------------------------------------------------------------------------
 /*
-   get ssms of l1 board and board board2
+   get ssms of l0 board and board board2
 */
 int getSSMs(int inpnum,int board,FILE *f){
  char dt[32];
@@ -186,7 +186,7 @@ int rcscp; char cmd[100];
  usleep(4000); // fine even for triggering with BOBR signal
  stopSSM(board);   // which is coming 19 orbits before interaction
  strcpy(filename,"");
- sprintf(filename,"l1_%i_%s.dmp",inpnum,dt);
+ sprintf(filename,"l0_%i_%s.dmp",inpnum,dt);
  //dumpSSM(1,filename);
  readSSM(board);
  dumpssm(board,filename);
@@ -278,10 +278,13 @@ int printCounters(w32 *l0, int trig, FILE *f){
          - l0 ssm dump
 */
 int inputsSMAQ(int board, int inpnum){
+ //w32 L0counts[MAXCOUNTERS];
  w32 last[MAXCOUNTERS];
  w32 l0first[MAXCOUNTERS];
  int counteroffset,countermax;
- int i;
+ w32 timeadr;
+ int i,timeold,time;
+ double timediff;
  int trigold,trig;
  int trigcond;
  FILE *f;
@@ -308,6 +311,7 @@ int inputsSMAQ(int board, int inpnum){
 // 
  initCorrel();
 //
+ timeadr=L1TIMEOFFSET;
  counteroffset=L1OFFSET;
  countermax=counteroffset+NINP+1;  // to be fast
  //countermax=MAXCOUNTERS;
@@ -316,9 +320,11 @@ int inputsSMAQ(int board, int inpnum){
    int ic;
    ic= L1OFFSET+i+1;
    firstRead[i]=l0first[ic]; prevRead[i]=l0first[ic]; 
+   prevtime= l0first[L1TIMEOFFSET];
  }
  // 1st readings
  getCountersBoard(board,countermax,last);
+ timeold=last[timeadr];
  trigold=last[counteroffset+inpnum];  //counting from 1
  //startSSM
  setomSSM(board,0xb);startSSM1(board);   // IN, continuous
@@ -329,14 +335,23 @@ int inputsSMAQ(int board, int inpnum){
     //printf("new \n");
     //for (int i=0;i<countermax;i++)printf("%u ",last[i]);
     //printf("\n"); 
+    time=last[timeadr];
     trig=last[counteroffset+inpnum];
     trigcond= (trig != trigold);
     //printf("trig: %i old %u new %u \n",inpnum,trigold,trig);
     if(trigcond){
+      //beepni(); cicolino not used recently
       getSSMs(inpnum,board,f);   // to be checked: what happens if inpnum=0?
       trigold=trig;
+      //countersRead();
+      //break;
     };
-    usleep(1000); 
+    usleep(1000); // was 200 at the start of Aug (can be much more for 1bobr/48 secs)
+    timediff=getTime(timeold,time);
+    //printf("time: old %u new %u diff %f\n",timeold,time,timediff); 
+    if(timediff>1000.*2){   // per 1 secs
+      timeold=time;
+    }    
  }
  return 0;
 }
